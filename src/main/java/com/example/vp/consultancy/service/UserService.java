@@ -3,6 +3,7 @@ package com.example.vp.consultancy.service;
 import com.example.vp.consultancy.dto.ConsultantRegistrationRequest;
 import com.example.vp.consultancy.dto.FarmerRegistrationRequest;
 import com.example.vp.consultancy.dto.UserResponse;
+import com.example.vp.consultancy.entity.User;
 import com.example.vp.consultancy.exception.DuplicateResourceException;
 import com.example.vp.consultancy.exception.ResourceNotFoundException;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -95,4 +96,20 @@ public interface UserService extends UserDetailsService {
      * @throws ResourceNotFoundException if user not found
      */
     UserResponse getCurrentUser();
+
+    boolean findByMobile(String number);
+
+    void createUser(User admin);
+
+    /**
+     * Creates an administrator user (ADMIN role). This is intended for bootstrap/admin creation.
+     * @param request contains mobile, password, name, email
+     * @return UserResponse for created admin
+     */
+    com.example.vp.consultancy.dto.UserResponse createAdmin(com.example.vp.consultancy.dto.ConsultantRegistrationRequest request);
+
+    /**
+     * Returns the full details of the currently authenticated user based on the access token.
+     */
+    com.example.vp.consultancy.dto.UserDetailsResponse getCurrentUserDetails();
 }

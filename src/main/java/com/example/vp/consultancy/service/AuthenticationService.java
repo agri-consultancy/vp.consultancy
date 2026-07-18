@@ -3,6 +3,8 @@ package com.example.vp.consultancy.service;
 import com.example.vp.consultancy.dto.LoginRequest;
 import com.example.vp.consultancy.dto.LoginResponse;
 import com.example.vp.consultancy.dto.RefreshTokenRequest;
+import com.example.vp.consultancy.exception.InvalidCredentialsException;
+import com.example.vp.consultancy.exception.ResourceNotFoundException;
 
 /**
  * Service interface for handling user authentication operations.
@@ -70,4 +72,10 @@ public interface AuthenticationService {
      * @throws IllegalArgumentException if userId is null or invalid
      */
     void logout(Long userId);
+
+    /**
+     * Changes password for the currently authenticated user.
+     * @param request contains oldPassword and newPassword
+     */
+    void changePassword(com.example.vp.consultancy.dto.UpdatePasswordRequest request);
 }

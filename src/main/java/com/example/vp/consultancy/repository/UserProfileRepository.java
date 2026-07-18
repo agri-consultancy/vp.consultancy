@@ -1,6 +1,7 @@
 package com.example.vp.consultancy.repository;
 
 import com.example.vp.consultancy.entity.UserProfile;
+import com.example.vp.consultancy.entity.UserRole;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -42,4 +43,13 @@ public interface UserProfileRepository extends JpaRepository<UserProfile, Long> 
      * @return List of UserProfile entities for farmers under this consultant
      */
     List<UserProfile> findByConsultantId(Long consultantId);
+
+    /**
+     * Find user profile by user mobile number
+     * @param mobile Mobile number from User entity
+     * @return Optional containing UserProfile if found
+     */
+    Optional<UserProfile> findByUser_Mobile(String mobile);
+
+    long countByConsultantIdAndUser_RoleAndUser_Status(Long consultantId, UserRole role, String status);
 }

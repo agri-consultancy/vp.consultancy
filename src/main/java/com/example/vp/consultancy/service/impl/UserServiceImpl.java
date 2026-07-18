@@ -56,7 +56,6 @@ public class UserServiceImpl implements UserService {
         Assert.notNull(request, "Consultant registration request cannot be null");
         Assert.hasText(request.getMobile(), "Mobile is required");
         Assert.hasText(request.getEmail(), "Email is required");
-        Assert.hasText(request.getPassword(), "Password is required");
 
         if (userRepository.findByMobile(request.getMobile()).isPresent()) {
             throw new DuplicateResourceException("Mobile number already registered");
@@ -80,9 +79,42 @@ public class UserServiceImpl implements UserService {
         userProfile.setFirstName(request.getFirstName());
         userProfile.setLastName(request.getLastName());
 
-        userProfileRepository.save(userProfile);
+        UserProfile savedUserProfile = userProfileRepository.save(userProfile);
 
-        return convertToUserResponse(savedUser);
+        return convertToUserResponse(savedUserProfile);
+    }
+
+    @Override
+    public com.example.vp.consultancy.dto.UserResponse createAdmin(com.example.vp.consultancy.dto.ConsultantRegistrationRequest request) {
+        Assert.notNull(request, "Admin registration request cannot be null");
+        Assert.hasText(request.getMobile(), "Mobile is required");
+        Assert.hasText(request.getEmail(), "Email is required");
+
+        if (userRepository.findByMobile(request.getMobile()).isPresent()) {
+            throw new DuplicateResourceException("Mobile number already registered");
+        }
+
+        if (userProfileRepository.findByEmail(request.getEmail()).isPresent()) {
+            throw new DuplicateResourceException("Email already registered");
+        }
+
+        User user = new User();
+        user.setMobile(request.getMobile());
+        user.setPassword(passwordEncoder.encode(request.getPassword()));
+        user.setRole(UserRole.ADMIN);
+        user.setStatus("ACTIVE");
+
+        User savedUser = userRepository.save(user);
+
+        UserProfile userProfile = new UserProfile();
+        userProfile.setUser(savedUser);
+        userProfile.setEmail(request.getEmail());
+        userProfile.setFirstName(request.getFirstName());
+        userProfile.setLastName(request.getLastName());
+
+        UserProfile savedUserProfile = userProfileRepository.save(userProfile);
+
+        return convertToUserResponse(savedUserProfile);
     }
 
     @Override
@@ -91,7 +123,6 @@ public class UserServiceImpl implements UserService {
         Assert.notNull(consultantId, "Consultant ID cannot be null");
         Assert.hasText(request.getMobile(), "Mobile is required");
         Assert.hasText(request.getEmail(), "Email is required");
-        Assert.hasText(request.getPassword(), "Password is required");
 
         User consultant = userRepository.findById(consultantId)
             .orElseThrow(() -> new ResourceNotFoundException("Consultant not found"));
@@ -106,7 +137,8 @@ public class UserServiceImpl implements UserService {
 
         User farmer = new User();
         farmer.setMobile(request.getMobile());
-        farmer.setPassword(passwordEncoder.encode(request.getPassword()));
+        String generatedPassword = generateRandomPassword(10);
+        farmer.setPassword(passwordEncoder.encode(generatedPassword));
         farmer.setRole(UserRole.FARMER);
         farmer.setStatus("ACTIVE");
 
@@ -118,6 +150,7 @@ public class UserServiceImpl implements UserService {
         userProfile.setFirstName(request.getFirstName());
         userProfile.setLastName(request.getLastName());
         userProfile.setConsultant(consultant);
+        userProfile.setSector(request.getSector());
 
         Address address = new Address();
         address.setAddressLine(request.getAddressLine());
@@ -129,9 +162,29 @@ public class UserServiceImpl implements UserService {
         Address savedAddress = addressRepository.save(address);
         userProfile.setAddress(savedAddress);
 
-        userProfileRepository.save(userProfile);
+        UserProfile savedUserProfile = userProfileRepository.save(userProfile);
 
-        return convertToUserResponse(savedFarmer);
+        // Build response including the generated password so the consultant receives it
+        UserResponse response = convertToUserResponse(savedUserProfile);
+        response.setFirstName(userProfile.getFirstName());
+        response.setLastName(userProfile.getLastName());
+        response.setEmail(userProfile.getEmail());
+        response.setGeneratedPassword(generatedPassword);
+
+        return response;
+    }
+
+    /**
+     * Generates a random alphanumeric password of the requested length.
+     */
+    private String generateRandomPassword(int length) {
+        String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+        StringBuilder sb = new StringBuilder(length);
+        for (int i = 0; i < length; i++) {
+            int idx = (int) (Math.random() * chars.length());
+            sb.append(chars.charAt(idx));
+        }
+        return sb.toString();
     }
 
     @Override
@@ -178,6 +231,55 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional(readOnly = true)
+    public com.example.vp.consultancy.dto.UserDetailsResponse getCurrentUserDetails() {
+        String mobile = SecurityContextHolder.getContext()
+            .getAuthentication()
+            .getName();
+
+        User user = userRepository.findByMobile(mobile)
+            .orElseThrow(() -> new ResourceNotFoundException("Current user not found"));
+
+        com.example.vp.consultancy.dto.UserDetailsResponse details = new com.example.vp.consultancy.dto.UserDetailsResponse();
+        details.setId(user.getId());
+        details.setMobile(user.getMobile());
+        details.setRole(user.getRole() != null ? user.getRole().toString() : null);
+        details.setStatus(user.getStatus());
+
+        // Populate profile and address if available
+        userProfileRepository.findByUserId(user.getId()).ifPresent(up -> {
+            details.setFirstName(up.getFirstName());
+            details.setLastName(up.getLastName());
+            details.setEmail(up.getEmail());
+            if (up.getConsultant() != null) {
+                details.setConsultantId(up.getConsultant().getId());
+            }
+            if (up.getAddress() != null) {
+                com.example.vp.consultancy.dto.UserDetailsResponse.AddressDto addr = new com.example.vp.consultancy.dto.UserDetailsResponse.AddressDto();
+                addr.setId(up.getAddress().getId());
+                addr.setAddressLine(up.getAddress().getAddressLine());
+                addr.setCity(up.getAddress().getCity());
+                addr.setDistrict(up.getAddress().getDistrict());
+                addr.setState(up.getAddress().getState());
+                addr.setPostalCode(up.getAddress().getPostalCode());
+                details.setAddress(addr);
+            }
+        });
+
+        return details;
+    }
+
+    @Override
+    public boolean findByMobile(String number) {
+        return userRepository.findByMobile(number).isPresent();
+    }
+
+    @Override
+    public void createUser(User admin) {
+        userRepository.save(admin);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
         User user = userRepository.findByMobile(username)
             .orElseThrow(() -> new UsernameNotFoundException("User not found with mobile: " + username));
@@ -189,12 +291,38 @@ public class UserServiceImpl implements UserService {
         );
     }
 
+    private UserResponse convertToUserResponse(UserProfile user) {
+        UserResponse response = new UserResponse();
+        response.setId(user.getUser().getId());
+        response.setMobile(user.getUser().getMobile());
+        response.setRole(user.getUser().getRole().toString());
+        response.setStatus(user.getUser().getStatus());
+        response.setFirstName(user.getFirstName());
+        response.setLastName(user.getLastName());
+        response.setEmail(user.getEmail());
+        return response;
+    }
+
+    /**
+     * Convert a User entity to UserResponse. If a UserProfile exists for the user,
+     * include profile fields (firstName, lastName, email).
+     */
     private UserResponse convertToUserResponse(User user) {
         UserResponse response = new UserResponse();
         response.setId(user.getId());
         response.setMobile(user.getMobile());
-        response.setRole(user.getRole().toString());
+        response.setRole(user.getRole() != null ? user.getRole().toString() : null);
         response.setStatus(user.getStatus());
+
+        // Try to populate profile fields when available
+        if (user != null && user.getId() != null) {
+            userProfileRepository.findByUserId(user.getId()).ifPresent(up -> {
+                response.setFirstName(up.getFirstName());
+                response.setLastName(up.getLastName());
+                response.setEmail(up.getEmail());
+            });
+        }
+
         return response;
     }
 

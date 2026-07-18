@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.springframework.security.core.userdetails.UserDetails;
 
 /**
  * Login Response DTO - Returns JWT tokens after successful authentication
@@ -37,5 +38,5 @@ public class LoginResponse {
     private String mobile;
 
     /** User information object */
-    private UserResponse user;
+    private UserDetailsDto userDetails;
 }

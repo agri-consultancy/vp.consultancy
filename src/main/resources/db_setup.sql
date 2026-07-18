@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS user_profiles (
     user_id BIGINT NOT NULL UNIQUE COMMENT 'Reference to users table (1:1 relationship)',
     consultant_id BIGINT COMMENT 'Reference to consultant user if this user is a farmer',
     address_id BIGINT COMMENT 'Reference to address table',
+    sector VARCHAR(100) COMMENT 'Primary sector: Arable, Horticulture, Mixed, etc.',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -60,6 +61,100 @@ CREATE TABLE IF NOT EXISTS user_profiles (
     INDEX idx_email (email)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 COMMENT 'Extended user profile information';
+
+-- ==================== CROP VARIETIES TABLE ====================
+-- Stores supported crop varieties defined by consultants
+CREATE TABLE IF NOT EXISTS crop_varieties (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    crop_id BIGINT,
+    consultant_id BIGINT,
+    name VARCHAR(255) NOT NULL COMMENT 'Variety name like Golden Harvest X-12',
+    description VARCHAR(500) COMMENT 'Specific traits and growth habits',
+    climate VARCHAR(255) COMMENT 'Climate preference: Tropical, Temperate, Arid, Subtropical',
+    yield_potential VARCHAR(255) COMMENT 'Typical yield like 4.5-5.2 Tons/Hectare',
+    cycle_duration_days BIGINT COMMENT 'Days for crop cycle',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (crop_id) REFERENCES crops(id) ON DELETE SET NULL,
+    FOREIGN KEY (consultant_id) REFERENCES user_profiles(id) ON DELETE SET NULL,
+    INDEX idx_crop_id (crop_id),
+    INDEX idx_consultant_id (consultant_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+COMMENT 'Master table for crop varieties';
+
+-- ==================== FARMER CROP VARIETIES TABLE ====================
+-- Tracks crop varieties assigned to farmers with cultivation details
+CREATE TABLE IF NOT EXISTS farmer_crop_varieties (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    farmer_id BIGINT NOT NULL COMMENT 'Reference to farmer user profile',
+    crop_variety_id BIGINT NOT NULL COMMENT 'Reference to crop variety',
+    total_land DOUBLE COMMENT 'Total land area in hectares',
+    total_plants INT COMMENT 'Total number of plants',
+    sowing_date DATE COMMENT 'Date of sowing',
+    expected_harvest_date DATE COMMENT 'Expected harvest date',
+    status VARCHAR(50) COMMENT 'Status: Preparing, Active, Harvesting, Completed',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (farmer_id) REFERENCES user_profiles(id) ON DELETE CASCADE,
+    FOREIGN KEY (crop_variety_id) REFERENCES crop_varieties(id) ON DELETE CASCADE,
+    INDEX idx_farmer_id (farmer_id),
+    INDEX idx_crop_variety_id (crop_variety_id),
+    INDEX idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+COMMENT 'Farmer crop variety assignments and cultivation tracking';
+
+-- ==================== FARMER SENT SCHEDULE TABLES ====================
+-- Tracks consultant-sent schedule batches and frozen day/task snapshots
+CREATE TABLE IF NOT EXISTS farmer_crop_variety_schedule (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    farmer_id BIGINT NOT NULL COMMENT 'Reference to farmer user profile',
+    farmer_crop_variety_id BIGINT NOT NULL COMMENT 'Reference to farmer crop variety assignment',
+    start_date DATE COMMENT 'Date when this schedule batch was sent',
+    last_sent_day BIGINT NOT NULL COMMENT 'Last day number included in this batch',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (farmer_id) REFERENCES user_profiles(id) ON DELETE CASCADE,
+    FOREIGN KEY (farmer_crop_variety_id) REFERENCES farmer_crop_varieties(id) ON DELETE CASCADE,
+    INDEX idx_fcv_schedule_farmer (farmer_id),
+    INDEX idx_fcv_schedule_variety (farmer_crop_variety_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+COMMENT 'Sent schedule batches for farmer crop assignments';
+
+CREATE TABLE IF NOT EXISTS farmer_schedule_days (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    schedule_id BIGINT NOT NULL COMMENT 'Reference to sent schedule batch',
+    farmer_id BIGINT NOT NULL COMMENT 'Reference to farmer user profile',
+    farmer_crop_variety_id BIGINT NOT NULL COMMENT 'Reference to farmer crop variety assignment',
+    day_number BIGINT NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    description VARCHAR(255),
+    status VARCHAR(50),
+    display_order BIGINT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (schedule_id) REFERENCES farmer_crop_variety_schedule(id) ON DELETE CASCADE,
+    FOREIGN KEY (farmer_id) REFERENCES user_profiles(id) ON DELETE CASCADE,
+    FOREIGN KEY (farmer_crop_variety_id) REFERENCES farmer_crop_varieties(id) ON DELETE CASCADE,
+    INDEX idx_farmer_schedule_day_farmer (farmer_id),
+    INDEX idx_farmer_schedule_day_variety (farmer_crop_variety_id),
+    INDEX idx_farmer_schedule_day_number (day_number)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+COMMENT 'Day-wise sent schedules for a farmer crop assignment';
+
+CREATE TABLE IF NOT EXISTS farmer_schedule_tasks (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    schedule_day_id BIGINT NOT NULL COMMENT 'Reference to farmer_schedule_days',
+    fertilizer_name VARCHAR(255) NOT NULL,
+    quantity VARCHAR(255) NOT NULL,
+    proportion VARCHAR(50) NOT NULL,
+    priority BIGINT,
+    description VARCHAR(255) NOT NULL,
+    task_type VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (schedule_day_id) REFERENCES farmer_schedule_days(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+COMMENT 'Task-level schedule details for each farmer schedule day';
 
 -- ==================== REFRESH TOKEN TABLE ====================
 -- Stores JWT refresh tokens for token rotation
@@ -74,6 +169,25 @@ CREATE TABLE IF NOT EXISTS refresh_token (
     INDEX idx_user_id (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 COMMENT 'JWT refresh token storage for token rotation and revocation';
+
+-- ==================== CROPS TABLE ====================
+-- Stores supported crops for consultancy services
+CREATE TABLE IF NOT EXISTS crops (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL UNIQUE COMMENT 'Crop name',
+    description VARCHAR(500) COMMENT 'Crop description and details',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_name (name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+COMMENT 'Master table for supported crops';
+
+CREATE TRIGGER IF NOT EXISTS crops_update_timestamp
+BEFORE UPDATE ON crops
+FOR EACH ROW
+BEGIN
+    SET NEW.updated_at = CURRENT_TIMESTAMP;
+END$$
 
 -- ==================== DEFAULT DATA ====================
 -- Insert default ADMIN user for system initialization

@@ -103,7 +103,6 @@ public class UserServiceTest {
         // Arrange
         FarmerRegistrationRequest request = new FarmerRegistrationRequest();
         request.setMobile("9876543211");
-        request.setPassword("password123");
         request.setEmail("farmer@example.com");
         request.setFirstName("Jane");
         request.setLastName("Smith");

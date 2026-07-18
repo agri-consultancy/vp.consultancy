@@ -5,6 +5,14 @@ import com.example.vp.consultancy.dto.ApiResponse;
 import com.example.vp.consultancy.dto.LoginRequest;
 import com.example.vp.consultancy.dto.LoginResponse;
 import com.example.vp.consultancy.dto.RefreshTokenRequest;
+import com.example.vp.consultancy.dto.UpdatePasswordRequest;
+import com.example.vp.consultancy.dto.ConsultantRegistrationRequest;
+import com.example.vp.consultancy.dto.UserResponse;
+import com.example.vp.consultancy.service.UserService;
+import org.springframework.security.access.prepost.PreAuthorize;
+import com.example.vp.consultancy.exception.InvalidCredentialsException;
+import com.example.vp.consultancy.exception.RateLimitExceededException;
+import com.example.vp.consultancy.exception.ResourceNotFoundException;
 import com.example.vp.consultancy.service.AuthenticationService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -28,14 +36,16 @@ import jakarta.validation.Valid;
 public class AuthController {
     
     private final AuthenticationService authenticationService;
+    private final UserService userService;
 
     /**
      * Constructor with dependency injection.
      * 
      * @param authenticationService authentication service for credential validation
      */
-    public AuthController(AuthenticationService authenticationService) {
+    public AuthController(AuthenticationService authenticationService, UserService userService) {
         this.authenticationService = authenticationService;
+        this.userService = userService;
     }
 
     /**
@@ -60,8 +70,9 @@ public class AuthController {
         LoginResponse response = authenticationService.login(request);
         return ResponseEntity.ok(new ApiResponse<>(
             true, 
-            "Login successful", 
-            response
+            "Login successful",
+            response,
+            HttpStatus.OK.value()
         ));
     }
 
@@ -88,7 +99,8 @@ public class AuthController {
         return ResponseEntity.ok(new ApiResponse<>(
             true,
             "Token refreshed successfully",
-            response
+            response,
+            HttpStatus.OK.value()
         ));
     }
 
@@ -110,7 +122,39 @@ public class AuthController {
         return ResponseEntity.ok(new ApiResponse<>(
             true,
             "Logout successful",
-            null
+            null,
+                HttpStatus.OK.value()
         ));
+    }
+
+    /**
+     * Change password for authenticated user.
+     */
+    @PostMapping("/change-password")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<Void>> changePassword(@Valid @RequestBody UpdatePasswordRequest request) {
+        authenticationService.changePassword(request);
+        return ResponseEntity.ok(new ApiResponse<>(true, "Password updated successfully", null, HttpStatus.OK.value()));
+    }
+
+    /**
+     * Public endpoint to create an admin user. No auth required.
+     * This is intentionally exposed without auth checks to allow initial bootstrap.
+     */
+    @PostMapping("/admins")
+    public ResponseEntity<ApiResponse<UserResponse>> createAdmin(@Valid @RequestBody ConsultantRegistrationRequest request) {
+        UserResponse response = userService.createAdmin(request);
+        return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED)
+                .body(new ApiResponse<>(true, "Admin created successfully", response, HttpStatus.OK.value()));
+    }
+
+    /**
+     * Returns the full details for the current user based on the access token.
+     */
+    @GetMapping("/user-profile")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<com.example.vp.consultancy.dto.UserDetailsResponse>> getCurrentUserDetails() {
+        com.example.vp.consultancy.dto.UserDetailsResponse details = userService.getCurrentUserDetails();
+        return ResponseEntity.ok(new ApiResponse<>(true, "User details retrieved successfully", details, HttpStatus.OK.value()));
     }
 }

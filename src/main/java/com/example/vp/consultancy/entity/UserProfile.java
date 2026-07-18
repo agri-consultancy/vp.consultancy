@@ -54,6 +54,9 @@ public class UserProfile {
     @JoinColumn(name = "address_id")
     private Address address;
 
+    @Column(length = 100)
+    private String sector;
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

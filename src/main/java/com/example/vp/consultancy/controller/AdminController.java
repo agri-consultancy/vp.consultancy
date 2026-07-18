@@ -1,9 +1,10 @@
 package com.example.vp.consultancy.controller;
 
 import com.example.vp.consultancy.annotation.RateLimit;
-import com.example.vp.consultancy.dto.ApiResponse;
-import com.example.vp.consultancy.dto.ConsultantRegistrationRequest;
-import com.example.vp.consultancy.dto.UserResponse;
+import com.example.vp.consultancy.dto.*;
+import com.example.vp.consultancy.exception.DuplicateResourceException;
+import com.example.vp.consultancy.exception.RateLimitExceededException;
+import com.example.vp.consultancy.service.CropService;
 import com.example.vp.consultancy.service.UserService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -28,14 +29,16 @@ import jakarta.validation.Valid;
 public class AdminController {
     
     private final UserService userService;
+    private final CropService cropService;
 
     /**
      * Constructor with dependency injection.
      * 
      * @param userService user management service
      */
-    public AdminController(UserService userService) {
+    public AdminController(UserService userService, CropService cropService) {
         this.userService = userService;
+        this.cropService = cropService;
     }
 
     /**
@@ -65,7 +68,33 @@ public class AdminController {
             .body(new ApiResponse<>(
                 true,
                 "Consultant registered successfully",
-                response
+                response,
+                HttpStatus.OK.value()
             ));
+    }
+
+
+    /**
+     * Adds a new crop to the system (Admin only).
+     *
+     * Rate limited to 20 requests per 60 seconds.
+     * Only accessible to users with ADMIN role.
+     *
+     * @param request the crop registration request with name and optional description
+     * @return ResponseEntity with ApiResponse containing created crop information
+     * @throws DuplicateResourceException if crop name already exists
+     * @throws RateLimitExceededException if rate limit is exceeded
+     */
+    @PostMapping("/crops")
+    @RateLimit(limit = 20, windowSize = 60)
+    public ResponseEntity<ApiResponse<CropResponse>> addCrop(@Valid @RequestBody CropRegistrationRequest request) {
+        CropResponse response = cropService.addCrop(request);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(new ApiResponse<>(
+                        true,
+                        "Crop added successfully",
+                        response,
+                        HttpStatus.OK.value()
+                ));
     }
 }

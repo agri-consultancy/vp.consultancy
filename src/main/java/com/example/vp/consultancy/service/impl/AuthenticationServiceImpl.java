@@ -1,14 +1,13 @@
 package com.example.vp.consultancy.service.impl;
 
 import com.example.vp.consultancy.config.JwtTokenUtil;
-import com.example.vp.consultancy.dto.LoginRequest;
-import com.example.vp.consultancy.dto.LoginResponse;
-import com.example.vp.consultancy.dto.RefreshTokenRequest;
-import com.example.vp.consultancy.dto.UserResponse;
+import com.example.vp.consultancy.dto.*;
 import com.example.vp.consultancy.entity.RefreshToken;
 import com.example.vp.consultancy.entity.User;
+import com.example.vp.consultancy.entity.UserProfile;
 import com.example.vp.consultancy.exception.InvalidCredentialsException;
 import com.example.vp.consultancy.exception.ResourceNotFoundException;
+import com.example.vp.consultancy.repository.UserProfileRepository;
 import com.example.vp.consultancy.repository.UserRepository;
 import com.example.vp.consultancy.service.AuthenticationService;
 import com.example.vp.consultancy.service.RefreshTokenService;
@@ -18,6 +17,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.util.Assert;
 
 import java.util.HashMap;
@@ -36,15 +37,20 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     private final JwtTokenUtil jwtTokenUtil;
     private final RefreshTokenService refreshTokenService;
     private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final UserProfileRepository userProfileRepository;
 
     public AuthenticationServiceImpl(AuthenticationManager authenticationManager,
-                                   JwtTokenUtil jwtTokenUtil,
-                                   RefreshTokenService refreshTokenService,
-                                   UserRepository userRepository) {
+                                     JwtTokenUtil jwtTokenUtil,
+                                     RefreshTokenService refreshTokenService,
+                                     UserRepository userRepository,
+                                     PasswordEncoder passwordEncoder, UserProfileRepository userProfileRepository) {
         this.authenticationManager = authenticationManager;
         this.jwtTokenUtil = jwtTokenUtil;
         this.refreshTokenService = refreshTokenService;
         this.userRepository = userRepository;
+        this.passwordEncoder = passwordEncoder;
+        this.userProfileRepository = userProfileRepository;
     }
 
     @Override
@@ -79,12 +85,16 @@ public class AuthenticationServiceImpl implements AuthenticationService {
             response.setExpiresIn(3600L);
             response.setRole(user.getRole().toString());
             response.setMobile(user.getMobile());
-            
-            UserResponse userResp = new UserResponse();
-            userResp.setId(user.getId());
-            userResp.setMobile(user.getMobile());
-            userResp.setRole(user.getRole().toString());
-            response.setUser(userResp);
+            userProfileRepository.findByUserId(user.getId()).ifPresent(
+                userProfile -> {
+                    UserDetailsDto userResp = new UserDetailsDto();
+                    userResp.setId(user.getId());
+                    userResp.setFirstName(userProfile.getFirstName());
+                    userResp.setLastName(userProfile.getLastName());
+                    userResp.setEmail(userProfile.getEmail());
+                    response.setUserDetails(userResp);
+                }
+            );
             
             return response;
 
@@ -129,12 +139,16 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         response.setExpiresIn(3600L);
         response.setRole(user.getRole().toString());
         response.setMobile(user.getMobile());
-        
-        UserResponse userResp = new UserResponse();
-        userResp.setId(user.getId());
-        userResp.setMobile(user.getMobile());
-        userResp.setRole(user.getRole().toString());
-        response.setUser(userResp);
+        userProfileRepository.findByUserId(user.getId()).ifPresent(
+                userProfile -> {
+                    UserDetailsDto userDetailsDto = new UserDetailsDto();
+                    userDetailsDto.setId(user.getId());
+                    userDetailsDto.setFirstName(userProfile.getFirstName());
+                    userDetailsDto.setLastName(userProfile.getLastName());
+                    userDetailsDto.setEmail(userProfile.getEmail());
+                    response.setUserDetails(userDetailsDto);
+                }
+        );
         
         return response;
     }
@@ -147,5 +161,23 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         }
 
         refreshTokenService.deleteByUserId(userId);
+    }
+
+    @Override
+    public void changePassword(com.example.vp.consultancy.dto.UpdatePasswordRequest request) {
+        Assert.notNull(request, "Update password request cannot be null");
+        Assert.hasText(request.getOldPassword(), "Old password is required");
+        Assert.hasText(request.getNewPassword(), "New password is required");
+
+        String mobile = SecurityContextHolder.getContext().getAuthentication().getName();
+        User user = userRepository.findByMobile(mobile)
+                .orElseThrow(() -> new com.example.vp.consultancy.exception.ResourceNotFoundException("User not found"));
+
+        if (!passwordEncoder.matches(request.getOldPassword(), user.getPassword())) {
+            throw new com.example.vp.consultancy.exception.InvalidCredentialsException("Old password does not match");
+        }
+
+        user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        userRepository.save(user);
     }
 }

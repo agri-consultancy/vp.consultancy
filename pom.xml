@@ -99,6 +99,13 @@
 			<optional>true</optional>
 		</dependency>
 
+		<!-- Apache POI for Excel Processing -->
+		<dependency>
+			<groupId>org.apache.poi</groupId>
+			<artifactId>poi-ooxml</artifactId>
+			<version>5.1.0</version>
+		</dependency>
+
 		<!-- DevTools -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
