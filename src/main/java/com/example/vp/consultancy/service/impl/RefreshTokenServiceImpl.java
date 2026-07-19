@@ -4,6 +4,7 @@ import com.example.vp.consultancy.entity.RefreshToken;
 import com.example.vp.consultancy.entity.User;
 import com.example.vp.consultancy.repository.RefreshTokenRepository;
 import com.example.vp.consultancy.service.RefreshTokenService;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,6 +30,8 @@ import java.util.UUID;
 @Service
 @Transactional
 public class RefreshTokenServiceImpl implements RefreshTokenService {
+
+    private static final org.slf4j.Logger logger = LoggerFactory.getLogger(RefreshTokenServiceImpl.class);
 
     @Value("${app.jwt.refresh-ms}")
     private Long refreshDurationMs;
@@ -62,6 +65,7 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
     @Override
     public RefreshToken createRefreshToken(User user) {
         Assert.notNull(user, "User cannot be null");
+        logger.info("Creating refresh token for user ID: {}", user.getId());
 
         RefreshToken refreshToken = new RefreshToken();
         refreshToken.setUser(user);
@@ -72,6 +76,8 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
         // Set expiration time to 7 days from now
         refreshToken.setExpiryDate(Instant.now().plusMillis(refreshDurationMs));
 
+        logger.info("Generated refresh token '{}' for user ID: {} with expiration at {}",
+                    refreshToken.getToken(), user.getId(), refreshToken.getExpiryDate());
         return refreshTokenRepository.save(refreshToken);
     }
 
@@ -89,6 +95,8 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
     @Override
     public Optional<RefreshToken> findByToken(String token) {
         Assert.hasText(token, "Token cannot be null or empty");
+
+        logger.info("Searching for refresh token: {}", token);
         return refreshTokenRepository.findByToken(token);
     }
 
@@ -106,6 +114,9 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
     @Override
     public boolean isExpired(RefreshToken token) {
         Assert.notNull(token, "Refresh token cannot be null");
+
+        logger.info("Checking expiration for refresh token: {} with expiry date: {}",
+                    token.getToken(), token.getExpiryDate());
         return Instant.now().isAfter(token.getExpiryDate());
     }
 
@@ -122,9 +133,13 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
     @Override
     public void deleteByUserId(Long userId) {
         Assert.notNull(userId, "User ID cannot be null");
+
         if (userId <= 0) {
+            logger.error("Invalid user ID: {}. User ID must be positive.", userId);
             throw new IllegalArgumentException("User ID must be positive");
         }
+
+        logger.info("Deleting all refresh tokens for user ID: {}", userId);
         refreshTokenRepository.deleteByUserId(userId);
     }
 }

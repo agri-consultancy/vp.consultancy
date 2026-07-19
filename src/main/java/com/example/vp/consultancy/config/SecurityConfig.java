@@ -1,6 +1,7 @@
 package com.example.vp.consultancy.config;
 
 import com.example.vp.consultancy.service.UserService;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -17,6 +18,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @EnableMethodSecurity(prePostEnabled = true)
 public class SecurityConfig {
 
+    private static final org.slf4j.Logger logger = LoggerFactory.getLogger(SecurityConfig.class);
     private final UserService userService;
     private final JwtTokenUtil jwtTokenUtil;
     private final PasswordEncoder passwordEncoder;
@@ -30,7 +32,7 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         JwtAuthenticationFilter jwtFilter = new JwtAuthenticationFilter(jwtTokenUtil, userService);
-
+        logger.info("Configuring security filter chain with JWT authentication filter");
         http.csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authz -> authz
@@ -44,7 +46,7 @@ public class SecurityConfig {
                         .anyRequest().authenticated())
                 .authenticationProvider(authenticationProvider())
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
-
+        logger.info("Security filter chain configured successfully");
         return http.build();
     }
 
@@ -53,6 +55,7 @@ public class SecurityConfig {
         DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider();
         authProvider.setUserDetailsService(userService);
         authProvider.setPasswordEncoder(passwordEncoder);
+        logger.info("DaoAuthenticationProvider configured with UserService and PasswordEncoder");
         return authProvider;
     }
 }

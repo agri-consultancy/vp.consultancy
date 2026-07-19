@@ -1,5 +1,6 @@
 package com.example.vp.consultancy.service.impl;
 
+import com.example.vp.consultancy.config.JwtAuthenticationFilter;
 import com.example.vp.consultancy.dto.ConsultantAdvertisementRequest;
 import com.example.vp.consultancy.dto.ConsultantAdvertisementResponse;
 import com.example.vp.consultancy.entity.ConsultantAdvertisement;
@@ -8,6 +9,7 @@ import com.example.vp.consultancy.exception.ResourceNotFoundException;
 import com.example.vp.consultancy.repository.ConsultantAdvertisementRepository;
 import com.example.vp.consultancy.repository.UserProfileRepository;
 import com.example.vp.consultancy.service.ConsultantAdvertisementService;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -26,6 +28,7 @@ import java.util.stream.Collectors;
 @Transactional
 public class ConsultantAdvertisementServiceImpl implements ConsultantAdvertisementService {
 
+    private static final org.slf4j.Logger logger = LoggerFactory.getLogger(ConsultantAdvertisementServiceImpl.class);
     private final ConsultantAdvertisementRepository advertisementRepository;
     private final UserProfileRepository userProfileRepository;
 
@@ -49,10 +52,10 @@ public class ConsultantAdvertisementServiceImpl implements ConsultantAdvertiseme
         String consultantMobile = SecurityContextHolder.getContext()
                 .getAuthentication()
                 .getName();
-
+        logger.info("Adding advertisement for consultant with mobile: {}", consultantMobile);
         UserProfile consultant = userProfileRepository.findByUser_Mobile(consultantMobile)
                 .orElseThrow(() -> new ResourceNotFoundException("Consultant profile not found"));
-
+        logger.info("Consultant profile found: {} {}", consultant.getFirstName(), consultant.getLastName());
         // Create advertisement
         ConsultantAdvertisement advertisement = new ConsultantAdvertisement();
         advertisement.setConsultant(consultant);
@@ -63,7 +66,7 @@ public class ConsultantAdvertisementServiceImpl implements ConsultantAdvertiseme
         advertisement.setType(request.getType().trim().toLowerCase());
 
         ConsultantAdvertisement savedAdvertisement = advertisementRepository.save(advertisement);
-
+        logger.info("Advertisement saved with ID: {}", savedAdvertisement.getId());
         return convertToResponse(savedAdvertisement);
     }
 
@@ -74,10 +77,10 @@ public class ConsultantAdvertisementServiceImpl implements ConsultantAdvertiseme
         String consultantMobile = SecurityContextHolder.getContext()
                 .getAuthentication()
                 .getName();
-
+        logger.info("Fetching advertisements for consultant with mobile: {}", consultantMobile);
         UserProfile consultant = userProfileRepository.findByUser_Mobile(consultantMobile)
                 .orElseThrow(() -> new ResourceNotFoundException("Consultant profile not found"));
-
+        logger.debug("Consultant profile found: {} {}", consultant.getFirstName(), consultant.getLastName());
         return advertisementRepository.findByConsultantIdOrderByPriority(consultant.getId())
                 .stream()
                 .map(this::convertToResponse)
@@ -87,6 +90,7 @@ public class ConsultantAdvertisementServiceImpl implements ConsultantAdvertiseme
     @Override
     @Transactional(readOnly = true)
     public List<ConsultantAdvertisementResponse> getAllAdvertisements() {
+        logger.info("Fetching all advertisements");
         return advertisementRepository.findAllOrderByPriority()
                 .stream()
                 .map(this::convertToResponse)
@@ -102,16 +106,17 @@ public class ConsultantAdvertisementServiceImpl implements ConsultantAdvertiseme
         String consultantMobile = SecurityContextHolder.getContext()
                 .getAuthentication()
                 .getName();
-
+        logger.info("Updating advertisement with ID: {} for consultant with mobile: {}", advertisementId, consultantMobile);
         UserProfile consultant = userProfileRepository.findByUser_Mobile(consultantMobile)
                 .orElseThrow(() -> new ResourceNotFoundException("Consultant profile not found"));
-
+        logger.debug("Consultant profile found : {} {}", consultant.getFirstName(), consultant.getLastName());
         // Get advertisement
         ConsultantAdvertisement advertisement = advertisementRepository.findById(advertisementId)
                 .orElseThrow(() -> new ResourceNotFoundException("Advertisement not found with ID: " + advertisementId));
-
+         logger.info("Advertisement found with ID: {} for consultant ID: {}", advertisementId, advertisement.getConsultant().getId());
         // Check authorization
         if (!advertisement.getConsultant().getId().equals(consultant.getId())) {
+            logger.error("Unauthorized update attempt by consultant with ID: {} on advertisement with ID: {}", consultant.getId(), advertisementId);
             throw new AccessDeniedException("You are not authorized to update this advertisement");
         }
 
@@ -125,7 +130,7 @@ public class ConsultantAdvertisementServiceImpl implements ConsultantAdvertiseme
         }
 
         ConsultantAdvertisement updatedAdvertisement = advertisementRepository.save(advertisement);
-
+        logger.info("Advertisement updated with ID: {} for consultant ID: {}", updatedAdvertisement.getId(), updatedAdvertisement.getConsultant().getId());
         return convertToResponse(updatedAdvertisement);
     }
 
@@ -137,29 +142,32 @@ public class ConsultantAdvertisementServiceImpl implements ConsultantAdvertiseme
         String consultantMobile = SecurityContextHolder.getContext()
                 .getAuthentication()
                 .getName();
-
+        logger.info("Deleting advertisement with ID: {} for consultant with mobile: {}", advertisementId, consultantMobile);
         UserProfile consultant = userProfileRepository.findByUser_Mobile(consultantMobile)
                 .orElseThrow(() -> new ResourceNotFoundException("Consultant profile not found"));
-
+        logger.info("Consultant profile found : {} {}", consultant.getFirstName(), consultant.getLastName());
         // Get advertisement
         ConsultantAdvertisement advertisement = advertisementRepository.findById(advertisementId)
                 .orElseThrow(() -> new ResourceNotFoundException("Advertisement not found with ID: " + advertisementId));
 
         // Check authorization
         if (!advertisement.getConsultant().getId().equals(consultant.getId())) {
+            logger.error("Unauthorized delete attempt by consultant with ID: {} on advertisement with ID: {}", consultant.getId(), advertisementId);
             throw new AccessDeniedException("You are not authorized to delete this advertisement");
         }
 
         advertisementRepository.delete(advertisement);
+        logger.info("Advertisement deleted with ID: {} for consultant ID: {}", advertisementId, consultant.getId());
     }
 
     private ConsultantAdvertisementResponse convertToResponse(ConsultantAdvertisement advertisement) {
         String consultantName = "N/A";
+        logger.info("Converting advertisement with ID: {} to response DTO", advertisement.getId());
         if (advertisement.getConsultant() != null) {
             consultantName = advertisement.getConsultant().getFirstName() + " " + 
                            advertisement.getConsultant().getLastName();
         }
-
+        logger.info("Converting advertisement with ID: {} to response DTO for consultant: {}", advertisement.getId(), consultantName);
         return ConsultantAdvertisementResponse.builder()
                 .id(advertisement.getId())
                 .url(advertisement.getUrl())

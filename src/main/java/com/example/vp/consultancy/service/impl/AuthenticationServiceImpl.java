@@ -1,5 +1,6 @@
 package com.example.vp.consultancy.service.impl;
 
+import com.example.vp.consultancy.config.JwtAuthenticationFilter;
 import com.example.vp.consultancy.config.JwtTokenUtil;
 import com.example.vp.consultancy.dto.*;
 import com.example.vp.consultancy.entity.RefreshToken;
@@ -11,6 +12,7 @@ import com.example.vp.consultancy.repository.UserProfileRepository;
 import com.example.vp.consultancy.repository.UserRepository;
 import com.example.vp.consultancy.service.AuthenticationService;
 import com.example.vp.consultancy.service.RefreshTokenService;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -32,7 +34,8 @@ import java.util.Optional;
 @Service
 @Transactional
 public class AuthenticationServiceImpl implements AuthenticationService {
-    
+
+    private static final org.slf4j.Logger logger = LoggerFactory.getLogger(AuthenticationServiceImpl.class);
     private final AuthenticationManager authenticationManager;
     private final JwtTokenUtil jwtTokenUtil;
     private final RefreshTokenService refreshTokenService;
@@ -55,6 +58,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
     @Override
     public LoginResponse login(LoginRequest request) {
+        logger.info("Attempting login for mobile: {}", request.getMobile());
         Assert.notNull(request, "Login request cannot be null");
         Assert.hasText(request.getMobile(), "Mobile number cannot be empty");
         Assert.hasText(request.getPassword(), "Password cannot be empty");
@@ -66,7 +70,6 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                     request.getPassword()
                 )
             );
-
             User user = userRepository.findByMobile(request.getMobile())
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
@@ -95,10 +98,11 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                     response.setUserDetails(userResp);
                 }
             );
-            
+            logger.info("Login successful for mobile: {} and response: {}", request.getMobile(), response);
             return response;
 
         } catch (AuthenticationException e) {
+            logger.error("Authentication failed for mobile: {}", request.getMobile(), e);
             throw new InvalidCredentialsException("Invalid mobile number or password");
         }
     }
@@ -109,20 +113,23 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         Assert.hasText(request.getRefreshToken(), "Refresh token cannot be empty");
 
         String token = request.getRefreshToken();
-        
+        logger.info("Attempting to refresh token: {}", token);
         Optional<RefreshToken> refreshTokenOpt = refreshTokenService.findByToken(token);
         if (refreshTokenOpt.isEmpty()) {
+            logger.error("Refresh token not found: {}", token);
             throw new InvalidCredentialsException("Invalid refresh token");
         }
 
         RefreshToken refreshToken = refreshTokenOpt.get();
         
         if (refreshTokenService.isExpired(refreshToken)) {
+            logger.error("Refresh token has expired: {}", token);
             throw new InvalidCredentialsException("Refresh token has expired");
         }
 
         User user = refreshToken.getUser();
         if (user == null) {
+            logger.error("User not found for refresh token: {}", token);
             throw new ResourceNotFoundException("User not found for refresh token");
         }
 
@@ -149,18 +156,21 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                     response.setUserDetails(userDetailsDto);
                 }
         );
-        
+        logger.info("Token refreshed successfully for user: {} and response: {}", user.getMobile(), response);
         return response;
     }
 
     @Override
     public void logout(Long userId) {
+        logger.info("Attempting logout for userId: {}", userId);
         Assert.notNull(userId, "User ID cannot be null");
         if (userId <= 0) {
+            logger.error("Invalid user ID for logout: {}", userId);
             throw new IllegalArgumentException("User ID must be positive");
         }
 
         refreshTokenService.deleteByUserId(userId);
+        logger.info("Logout successful for userId: {}", userId);
     }
 
     @Override
@@ -174,10 +184,12 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 .orElseThrow(() -> new com.example.vp.consultancy.exception.ResourceNotFoundException("User not found"));
 
         if (!passwordEncoder.matches(request.getOldPassword(), user.getPassword())) {
+            logger.error("Old password does not match for user: {}", mobile);
             throw new com.example.vp.consultancy.exception.InvalidCredentialsException("Old password does not match");
         }
 
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         userRepository.save(user);
+        logger.info("Password changed successfully for user: {}", mobile);
     }
 }

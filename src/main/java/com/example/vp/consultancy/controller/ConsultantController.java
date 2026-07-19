@@ -1,6 +1,7 @@
 package com.example.vp.consultancy.controller;
 
 import com.example.vp.consultancy.annotation.RateLimit;
+import com.example.vp.consultancy.config.JwtAuthenticationFilter;
 import com.example.vp.consultancy.dto.*;
 import com.example.vp.consultancy.entity.UserProfile;
 import com.example.vp.consultancy.entity.User;
@@ -11,6 +12,7 @@ import com.example.vp.consultancy.repository.UserRepository;
 import com.example.vp.consultancy.repository.UserProfileRepository;
 import com.example.vp.consultancy.service.*;
 import jakarta.validation.constraints.Positive;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -35,7 +37,8 @@ import java.util.List;
 @RequestMapping("/api/consultant")
 @PreAuthorize("hasRole('CONSULTANT')")
 public class  ConsultantController {
-    
+
+    private static final org.slf4j.Logger logger = LoggerFactory.getLogger(ConsultantController.class);
     private final UserService userService;
     private final UserRepository userRepository;
     private final CropService cropService;
@@ -102,18 +105,20 @@ public class  ConsultantController {
     @RateLimit(limit = 20, windowSize = 60)
     public ResponseEntity<ApiResponse<UserResponse>> registerFarmer(
             @Valid @RequestBody FarmerRegistrationRequest request) {
+        logger.info("Registering farmer with mobile: {} and email: {}", request.getMobile(), request.getEmail());
         // Extract current authenticated consultant's mobile
         String consultantMobile = SecurityContextHolder.getContext()
             .getAuthentication()
             .getName();
-        
+
+        logger.info("Current consultant mobile: {}", consultantMobile);
         // Retrieve consultant user to get the ID
         User consultant = userRepository.findByMobile(consultantMobile)
             .orElseThrow(() -> new RuntimeException("Consultant not found"));
-        
+        logger.info("Consultant found with details: {}", consultant);
         // Register farmer under this consultant
         UserResponse response = userService.registerFarmer(request, consultant.getId());
-        
+        logger.info("Farmer registered successfully with ID: {}", response.getId());
         return ResponseEntity.status(HttpStatus.CREATED)
             .body(new ApiResponse<>(
                 true,
@@ -140,17 +145,18 @@ public class  ConsultantController {
     @GetMapping("/farmers")
     public ResponseEntity<ApiResponse<List<UserResponse>>> getAllFarmers() {
         // Extract current authenticated consultant's mobile
+        logger.info("Retrieving all farmers for the current consultant");
         String consultantMobile = SecurityContextHolder.getContext()
             .getAuthentication()
             .getName();
-        
+        logger.info("Current consultant mobile : {}", consultantMobile);
         // Retrieve consultant user to get the ID
         User consultant = userRepository.findByMobile(consultantMobile)
             .orElseThrow(() -> new RuntimeException("Consultant not found"));
-        
+        logger.info("Consultant found with details : {}", consultant);
         // Get all farmers for this consultant
         List<UserResponse> farmers = userService.getAllFarmers(consultant.getId());
-        
+        logger.info("Farmers retrieved successfully for consultant ID: {} and farmers: {}", consultant.getId(), farmers);
         return ResponseEntity.ok(new ApiResponse<>(
             true,
             "Farmers retrieved successfully",
@@ -170,7 +176,9 @@ public class  ConsultantController {
     @GetMapping("/crops")
     @RateLimit(limit = 20, windowSize = 60)
     public ResponseEntity<ApiResponse<List<CropResponse>>> getAllCrops() {
+        logger.info("Retrieving all crops sorted by name");
         List<CropResponse> crops = cropService.getAllCrops();
+        logger.info("Crops retrieved successfully: {}", crops);
         return ResponseEntity.ok(new ApiResponse<>(
                 true,
                 "Crops retrieved successfully",
@@ -189,7 +197,9 @@ public class  ConsultantController {
     @GetMapping("/crops-with-varieties")
     @RateLimit(limit = 20, windowSize = 60)
     public ResponseEntity<ApiResponse<List<ConsultantCropVarietiesResponse>>> getConsultantCropsWithVarieties() {
+        logger.info("Retrieving all crops with varieties for the current consultant");
         List<ConsultantCropVarietiesResponse> cropsWithVarieties = cropVarietyService.getConsultantCropsWithVarieties();
+        logger.info("Consultant crops with varieties retrieved successfully: {}", cropsWithVarieties);
         return ResponseEntity.ok(new ApiResponse<>(
                 true,
                 "Consultant crops with varieties retrieved successfully",
@@ -200,7 +210,9 @@ public class  ConsultantController {
 
     @GetMapping("/summary/active-counts")
     public ResponseEntity<ApiResponse<ConsultantActiveSummaryResponse>> getConsultantActiveSummary() {
+        logger.info("Retrieving consultant active summary");
         ConsultantActiveSummaryResponse summary = cropVarietyService.getConsultantActiveSummary();
+        logger.info("Consultant active summary retrieved successfully: {}", summary);
         return ResponseEntity.ok(new ApiResponse<>(
                 true,
                 "Consultant active summary retrieved successfully",
@@ -222,7 +234,9 @@ public class  ConsultantController {
     @RateLimit(limit = 20, windowSize = 60)
     public ResponseEntity<ApiResponse<CropVarietyResponse>> addCropVariety(
             @Valid @RequestBody CropVarietyRegistrationRequest request) {
+        logger.info("Adding new crop variety with name: {} for crop ID: {} and climate: {} and cycle duration: {} days", request.getName(), request.getCropId(), request.getClimate(), request.getCycleDurationDays());
         CropVarietyResponse response = cropVarietyService.addCropVariety(request);
+        logger.info("Crop variety created successfully: {}", response);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(new ApiResponse<>(
                         true,
@@ -244,9 +258,11 @@ public class  ConsultantController {
     @RateLimit(limit = 20, windowSize = 60)
     public ResponseEntity<ApiResponse<List<MasterScheduleTemplateDTO>>> getActiveMasterSchedulesByCropVariety(
             @PathVariable Long cropVarietyId) {
+        logger.info("Retrieving active master schedules for crop variety ID: {}", cropVarietyId);
         Long consultantId = getCurrentConsultantProfileId();
         List<MasterScheduleTemplateDTO> schedules =
             masterScheduleService.getActiveTemplatesByConsultantAndCropVariety(consultantId, cropVarietyId);
+        logger.info("Active master schedules retrieved successfully for crop variety ID: {}", cropVarietyId);
 
         return ResponseEntity.ok(new ApiResponse<>(
             true,
@@ -265,7 +281,9 @@ public class  ConsultantController {
      */
     @GetMapping("/farmers-portfolio")
     public ResponseEntity<ApiResponse<List<FarmerPortfolioResponse>>> getFarmersPortfolio() {
+        logger.info("Retrieving farmers portfolio for the current consultant");
         List<FarmerPortfolioResponse> portfolio = cropVarietyService.getFarmersPortfolio();
+        logger.info("Farmers portfolio retrieved successfully: {}", portfolio);
         return ResponseEntity.ok(new ApiResponse<>(
                 true,
                 "Farmers portfolio retrieved successfully",
@@ -285,7 +303,9 @@ public class  ConsultantController {
     @GetMapping("/farmers/{farmerId}")
     public ResponseEntity<ApiResponse<FarmerProfileDetailResponse>> getFarmerProfileDetail(
             @PathVariable Long farmerId) {
+        logger.info("Retrieving profile details for farmer ID: {}", farmerId);
         FarmerProfileDetailResponse response = cropVarietyService.getFarmerProfileDetail(farmerId);
+        logger.info("Farmer profile details retrieved successfully for farmer ID: {} and response: {}", farmerId, response);
         return ResponseEntity.ok(new ApiResponse<>(
                 true,
                 "Farmer profile retrieved successfully",
@@ -309,7 +329,9 @@ public class  ConsultantController {
     public ResponseEntity<ApiResponse<FarmerCropVarietyResponse>> assignCropVarietyToFarmer(
             @PathVariable Long farmerId,
             @Valid @RequestBody AssignCropVarietyRequest request) {
+        logger.info("Assigning crop variety ID: {} to farmer ID: {} with sowing date: {}", request.getCropVarietyId(), farmerId, request.getSowingDate());
         FarmerCropVarietyResponse response = cropVarietyService.assignCropVarietyToFarmer(farmerId, request);
+        logger.info("Crop variety assigned successfully: {}", response);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(new ApiResponse<>(
                         true,
@@ -334,7 +356,9 @@ public class  ConsultantController {
             @PathVariable Long farmerId,
             @PathVariable Long cropVarietyId,
             @Valid @RequestBody AssignCropVarietyRequest request) {
+        logger.info("Updating crop variety assignment ID: {} for farmer ID: {} with new sowing date: {}", cropVarietyId, farmerId, request.getSowingDate());
         FarmerCropVarietyResponse response = cropVarietyService.updateFarmerCropVariety(farmerId, cropVarietyId, request);
+        logger.info("Crop variety assignment updated successfully: {}", response);
         return ResponseEntity.ok(new ApiResponse<>(
                 true,
                 "Crop variety updated successfully",
@@ -348,9 +372,11 @@ public class  ConsultantController {
     public ResponseEntity<ApiResponse<FarmerScheduleResponse>> getFarmerSchedules(
             @PathVariable @Positive Long farmerId,
             @PathVariable @Positive Long farmerCropVarietyId) {
+        logger.info("Retrieving schedules for farmer ID: {} and farmer crop variety ID: {}", farmerId, farmerCropVarietyId);
         UserProfile farmerProfile = userProfileRepository.findById(farmerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Farmer profile not found"));
         FarmerScheduleResponse response = sendScheduleService.getFarmerSchedule(farmerProfile,farmerCropVarietyId);
+        logger.info("Farmer schedules retrieved successfully for farmer ID: {} and farmer crop variety ID: {}: {}", farmerId, farmerCropVarietyId, response);
         return ResponseEntity.ok(new ApiResponse<>(
                 true,
                 "Farmer schedules retrieved successfully",
@@ -381,7 +407,9 @@ public class  ConsultantController {
     @RateLimit(limit = 20, windowSize = 60)
     public ResponseEntity<ApiResponse<ConsultantAdvertisementResponse>> addAdvertisement(
             @Valid @RequestBody ConsultantAdvertisementRequest request) {
+        logger.info("Adding new advertisement with title: {} and URL: {} and priority: {}", request.getTitle(), request.getUrl(), request.getPriority());
         ConsultantAdvertisementResponse response = advertisementService.addAdvertisement(request);
+        logger.info("Advertisement created successfully: {}", response);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(new ApiResponse<>(
                         true,
@@ -407,7 +435,9 @@ public class  ConsultantController {
      */
     @GetMapping("/advertisements")
     public ResponseEntity<ApiResponse<List<ConsultantAdvertisementResponse>>> getAdvertisements() {
+        logger.info("Retrieving all advertisements for the current consultant");
         List<ConsultantAdvertisementResponse> advertisements = advertisementService.getConsultantAdvertisements();
+        logger.info("Advertisements retrieved successfully: {}", advertisements);
         return ResponseEntity.ok(new ApiResponse<>(
                 true,
                 "Advertisements retrieved successfully",
@@ -432,7 +462,9 @@ public class  ConsultantController {
     public ResponseEntity<ApiResponse<ConsultantAdvertisementResponse>> updateAdvertisement(
             @PathVariable Long advertisementId,
             @Valid @RequestBody ConsultantAdvertisementRequest request) {
+        logger.info("Updating advertisement ID: {} with new title: {} and URL: {} and priority: {}", advertisementId, request.getTitle(), request.getUrl(), request.getPriority());
         ConsultantAdvertisementResponse response = advertisementService.updateAdvertisement(advertisementId, request);
+        logger.info("Advertisement updated successfully: {}", response);
         return ResponseEntity.ok(new ApiResponse<>(
                 true,
                 "Advertisement updated successfully",
@@ -455,7 +487,9 @@ public class  ConsultantController {
     @DeleteMapping("/advertisements/{advertisementId}")
     public ResponseEntity<ApiResponse<Void>> deleteAdvertisement(
             @PathVariable Long advertisementId) {
+        logger.info("Deleting advertisement ID: {}", advertisementId);
         advertisementService.deleteAdvertisement(advertisementId);
+        logger.info("Advertisement deleted successfully: {}", advertisementId);
         return ResponseEntity.ok(new ApiResponse<>(
                 true,
                 "Advertisement deleted successfully",

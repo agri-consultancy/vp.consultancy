@@ -1,6 +1,7 @@
 package com.example.vp.consultancy.controller;
 
 import com.example.vp.consultancy.annotation.RateLimit;
+import com.example.vp.consultancy.config.JwtAuthenticationFilter;
 import com.example.vp.consultancy.dto.ApiResponse;
 import com.example.vp.consultancy.dto.LoginRequest;
 import com.example.vp.consultancy.dto.LoginResponse;
@@ -9,6 +10,7 @@ import com.example.vp.consultancy.dto.UpdatePasswordRequest;
 import com.example.vp.consultancy.dto.ConsultantRegistrationRequest;
 import com.example.vp.consultancy.dto.UserResponse;
 import com.example.vp.consultancy.service.UserService;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.access.prepost.PreAuthorize;
 import com.example.vp.consultancy.exception.InvalidCredentialsException;
 import com.example.vp.consultancy.exception.RateLimitExceededException;
@@ -34,7 +36,8 @@ import jakarta.validation.Valid;
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
-    
+
+    private static final org.slf4j.Logger logger = LoggerFactory.getLogger(AuthController.class);
     private final AuthenticationService authenticationService;
     private final UserService userService;
 
@@ -67,7 +70,9 @@ public class AuthController {
     @PostMapping("/login")
     @RateLimit(limit = 5, windowSize = 60)
     public ResponseEntity<ApiResponse<LoginResponse>> login(@Valid @RequestBody LoginRequest request) {
+        logger.info("Login attempt for mobile: {}", request.getMobile());
         LoginResponse response = authenticationService.login(request);
+        logger.info("Login successful for mobile: {}", request.getMobile());
         return ResponseEntity.ok(new ApiResponse<>(
             true, 
             "Login successful",
@@ -95,7 +100,9 @@ public class AuthController {
     @PostMapping("/refresh")
     @RateLimit(limit = 10, windowSize = 60)
     public ResponseEntity<ApiResponse<LoginResponse>> refreshToken(@Valid @RequestBody RefreshTokenRequest request) {
+        logger.info("Refresh token attempt for token: {}", request.getRefreshToken());
         LoginResponse response = authenticationService.refreshToken(request);
+        logger.info("Token refreshed successfully for token: {}", request.getRefreshToken());
         return ResponseEntity.ok(new ApiResponse<>(
             true,
             "Token refreshed successfully",
@@ -118,7 +125,9 @@ public class AuthController {
      */
     @PostMapping("/logout/{userId}")
     public ResponseEntity<ApiResponse<Void>> logout(@PathVariable Long userId) {
+        logger.info("Logout attempt for userId: {}", userId);
         authenticationService.logout(userId);
+        logger.info("Logout successful for userId: {}", userId);
         return ResponseEntity.ok(new ApiResponse<>(
             true,
             "Logout successful",
@@ -133,7 +142,9 @@ public class AuthController {
     @PostMapping("/change-password")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<Void>> changePassword(@Valid @RequestBody UpdatePasswordRequest request) {
+        logger.info("Change password attempt called");
         authenticationService.changePassword(request);
+        logger.info("Password changed successfully for user");
         return ResponseEntity.ok(new ApiResponse<>(true, "Password updated successfully", null, HttpStatus.OK.value()));
     }
 
@@ -143,7 +154,9 @@ public class AuthController {
      */
     @PostMapping("/admins")
     public ResponseEntity<ApiResponse<UserResponse>> createAdmin(@Valid @RequestBody ConsultantRegistrationRequest request) {
+        logger.info("Creating admin user with mobile: {}", request.getMobile());
         UserResponse response = userService.createAdmin(request);
+        logger.info("Admin user created successfully with mobile: {}", request.getMobile());
         return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED)
                 .body(new ApiResponse<>(true, "Admin created successfully", response, HttpStatus.OK.value()));
     }
@@ -154,7 +167,9 @@ public class AuthController {
     @GetMapping("/user-profile")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<com.example.vp.consultancy.dto.UserDetailsResponse>> getCurrentUserDetails() {
+        logger.info("Fetching current user details");
         com.example.vp.consultancy.dto.UserDetailsResponse details = userService.getCurrentUserDetails();
+        logger.info("User details retrieved successfully : {}", details);
         return ResponseEntity.ok(new ApiResponse<>(true, "User details retrieved successfully", details, HttpStatus.OK.value()));
     }
 }

@@ -1,5 +1,6 @@
 package com.example.vp.consultancy.service.impl;
 
+import com.example.vp.consultancy.config.JwtAuthenticationFilter;
 import com.example.vp.consultancy.dto.AssignCropVarietyRequest;
 import com.example.vp.consultancy.dto.ConsultantCropVarietiesResponse;
 import com.example.vp.consultancy.dto.ConsultantActiveSummaryResponse;
@@ -21,6 +22,7 @@ import com.example.vp.consultancy.repository.FarmerCropVarietyRepository;
 import com.example.vp.consultancy.repository.UserProfileRepository;
 import com.example.vp.consultancy.repository.UserRepository;
 import com.example.vp.consultancy.service.CropVarietyService;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,22 +44,20 @@ import java.util.stream.Collectors;
 @Transactional
 public class CropVarietyServiceImpl implements CropVarietyService {
 
+    private static final org.slf4j.Logger logger = LoggerFactory.getLogger(CropVarietyServiceImpl.class);
     private final CropVarietyRepository cropVarietyRepository;
     private final FarmerCropVarietyRepository farmerCropVarietyRepository;
     private final CropRepository cropRepository;
     private final UserProfileRepository userProfileRepository;
-    private final UserRepository userRepository;
 
     public CropVarietyServiceImpl(CropVarietyRepository cropVarietyRepository,
                                  FarmerCropVarietyRepository farmerCropVarietyRepository,
                                  CropRepository cropRepository,
-                                 UserProfileRepository userProfileRepository,
-                                 UserRepository userRepository) {
+                                 UserProfileRepository userProfileRepository) {
         this.cropVarietyRepository = cropVarietyRepository;
         this.farmerCropVarietyRepository = farmerCropVarietyRepository;
         this.cropRepository = cropRepository;
         this.userProfileRepository = userProfileRepository;
-        this.userRepository = userRepository;
     }
 
     @Override
@@ -70,10 +70,12 @@ public class CropVarietyServiceImpl implements CropVarietyService {
         String consultantMobile = SecurityContextHolder.getContext().getAuthentication().getName();
         UserProfile consultant = userProfileRepository.findByUser_Mobile(consultantMobile)
                 .orElseThrow(() -> new ResourceNotFoundException("Consultant not found"));
+        logger.info("Consultant {} is adding a new crop variety: {}", consultant.getUser().getId(), request.getName());
 
         // Get crop
         Crop crop = cropRepository.findById(request.getCropId())
                 .orElseThrow(() -> new ResourceNotFoundException("Crop not found with ID: " + request.getCropId()));
+        logger.info("Found crop {} for variety addition", crop.getName());
 
         // Create crop variety
         CropVariety cropVariety = new CropVariety();
@@ -84,8 +86,10 @@ public class CropVarietyServiceImpl implements CropVarietyService {
         cropVariety.setClimate(request.getClimate());
         cropVariety.setYieldPotential(request.getYieldPotential());
         cropVariety.setCycleDurationDays(request.getCycleDurationDays());
+        logger.info("Saving new crop variety: {} for crop: {} and crop variety: {}", request.getName(), crop.getName(), cropVariety);
 
         CropVariety savedVariety = cropVarietyRepository.save(cropVariety);
+        logger.info("Successfully added new crop variety: {} with ID: {}", savedVariety.getName(), savedVariety.getId());
 
         return convertToCropVarietyResponse(savedVariety);
     }
@@ -98,10 +102,12 @@ public class CropVarietyServiceImpl implements CropVarietyService {
         // Get farmer
         UserProfile farmer = userProfileRepository.findById(farmerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Farmer not found with ID: " + farmerId));
+        logger.info("Assigning crop variety to farmer: {} (ID: {})", farmer.getFirstName() + " " + farmer.getLastName(), farmerId);
 
         // Get crop variety
         CropVariety cropVariety = cropVarietyRepository.findById(request.getCropVarietyId())
                 .orElseThrow(() -> new ResourceNotFoundException("Crop variety not found with ID: " + request.getCropVarietyId()));
+        logger.info("Found crop variety: {} (ID: {}) for assignment", cropVariety.getName(), cropVariety.getId());
 
         // Create farmer crop variety assignment
         FarmerCropVariety farmerCropVariety = new FarmerCropVariety();
@@ -112,8 +118,10 @@ public class CropVarietyServiceImpl implements CropVarietyService {
         farmerCropVariety.setSowingDate(request.getSowingDate());
         farmerCropVariety.setExpectedHarvestDate(request.getExpectedHarvestDate());
         farmerCropVariety.setStatus(request.getStatus());
+        logger.info("Saving farmer crop variety assignment for farmer ID: {} and crop variety ID: {} with farmerCropVariety: {}", farmerId, cropVariety.getId(), farmerCropVariety);
 
         FarmerCropVariety savedAssignment = farmerCropVarietyRepository.save(farmerCropVariety);
+        logger.info("Successfully saved farmer crop variety assignment with ID: {}", savedAssignment.getId());
 
         return convertToFarmerCropVarietyResponse(savedAssignment);
     }
@@ -123,6 +131,8 @@ public class CropVarietyServiceImpl implements CropVarietyService {
     public List<FarmerPortfolioResponse> getFarmersPortfolio() {
         // Get current consultant
         String consultantMobile = SecurityContextHolder.getContext().getAuthentication().getName();
+        logger.info("Fetching farmers portfolio for consultant with mobile: {}", consultantMobile);
+
         UserProfile consultant = userProfileRepository.findByUser_Mobile(consultantMobile)
                 .orElseThrow(() -> new ResourceNotFoundException("Consultant not found"));
 
@@ -140,6 +150,7 @@ public class CropVarietyServiceImpl implements CropVarietyService {
 
         UserProfile farmer = userProfileRepository.findById(farmerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Farmer not found with ID: " + farmerId));
+        logger.info("Fetching detailed profile for farmer: {} (ID: {})", farmer.getFirstName() + " " + farmer.getLastName(), farmerId);
 
         FarmerProfileDetailResponse response = new FarmerProfileDetailResponse();
         response.setId(farmer.getId());
@@ -151,6 +162,7 @@ public class CropVarietyServiceImpl implements CropVarietyService {
 
         // Address info
         if (farmer.getAddress() != null) {
+            logger.info("Fetching address info for farmer: {} (ID: {})", farmer.getFirstName() + " " + farmer.getLastName(), farmer.getId());
             response.setAddressLine(farmer.getAddress().getAddressLine());
             response.setCity(farmer.getAddress().getCity());
             response.setDistrict(farmer.getAddress().getDistrict());
@@ -160,6 +172,7 @@ public class CropVarietyServiceImpl implements CropVarietyService {
 
         // Consultant info
         if (farmer.getConsultant() != null) {
+            logger.info("Fetching consultant info for farmer: {} (ID: {})", farmer.getFirstName() + " " + farmer.getLastName(), farmer.getId());
             response.setConsultantMobile(farmer.getConsultant().getMobile());
             // Try to get consultant profile details
             userProfileRepository.findByUserId(farmer.getConsultant().getId()).ifPresent(consultantProfile -> {
@@ -173,10 +186,12 @@ public class CropVarietyServiceImpl implements CropVarietyService {
         // Get assigned crops
         List<FarmerCropVarietyResponse> crops = getFarmerCrops(farmerId);
         response.setAssignedCrops(crops);
+        logger.info("Fetched {} assigned crops for farmer: {} (ID: {})", crops.size(), farmer.getFirstName() + " " + farmer.getLastName(), farmerId);
 
         response.setCreatedAt(farmer.getCreatedAt() != null ? farmer.getCreatedAt().toString() : null);
         response.setUpdatedAt(farmer.getUpdatedAt() != null ? farmer.getUpdatedAt().toString() : null);
 
+        logger.info("Returning detailed profile response for farmer: {} (ID: {})", farmer.getFirstName() + " " + farmer.getLastName(), farmerId);
         return response;
     }
 
@@ -184,6 +199,8 @@ public class CropVarietyServiceImpl implements CropVarietyService {
     @Transactional(readOnly = true)
     public List<FarmerCropVarietyResponse> getFarmerCrops(Long farmerId) {
         Assert.notNull(farmerId, "Farmer ID is required");
+
+        logger.info("Fetching assigned crops for farmer with ID: {}", farmerId);
 
         return farmerCropVarietyRepository.findByFarmerId(farmerId)
                 .stream()
@@ -195,6 +212,8 @@ public class CropVarietyServiceImpl implements CropVarietyService {
     @Transactional(readOnly = true)
     public List<FarmerCropVarietyResponse> getCurrentFarmerCrops() {
         String farmerMobile = SecurityContextHolder.getContext().getAuthentication().getName();
+        logger.info("Fetching assigned crops for current farmer with mobile: {}", farmerMobile);
+
         UserProfile farmer = userProfileRepository.findByUser_Mobile(farmerMobile)
                 .orElseThrow(() -> new ResourceNotFoundException("Farmer not found"));
 
@@ -209,9 +228,11 @@ public class CropVarietyServiceImpl implements CropVarietyService {
 
         FarmerCropVariety assignment = farmerCropVarietyRepository.findById(cropVarietyAssignmentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Assignment not found with ID: " + cropVarietyAssignmentId));
+        logger.info("Updating farmer crop variety assignment with ID: {} for farmer ID: {}", cropVarietyAssignmentId, farmerId);
 
         // Verify ownership
         if (!assignment.getFarmer().getId().equals(farmerId)) {
+            logger.error("Assignment ID: {} does not belong to farmer ID: {}", cropVarietyAssignmentId, farmerId);
             throw new ResourceNotFoundException("Assignment does not belong to this farmer");
         }
 
@@ -220,9 +241,11 @@ public class CropVarietyServiceImpl implements CropVarietyService {
         assignment.setSowingDate(request.getSowingDate());
         assignment.setExpectedHarvestDate(request.getExpectedHarvestDate());
         assignment.setStatus(request.getStatus());
+        logger.info("Saving updated farmer crop variety assignment with ID: {} for farmer ID: {} with updated assignment: {}", cropVarietyAssignmentId, farmerId, assignment);
 
         FarmerCropVariety updatedAssignment = farmerCropVarietyRepository.save(assignment);
 
+        logger.info("Successfully updated farmer crop variety assignment with ID: {} for farmer ID: {}", updatedAssignment.getId(), farmerId);
         return convertToFarmerCropVarietyResponse(updatedAssignment);
     }
 
@@ -232,9 +255,12 @@ public class CropVarietyServiceImpl implements CropVarietyService {
         String consultantMobile = SecurityContextHolder.getContext().getAuthentication().getName();
         UserProfile consultant = userProfileRepository.findByUser_Mobile(consultantMobile)
                 .orElseThrow(() -> new ResourceNotFoundException("Consultant not found"));
+        logger.info("Fetching crops with varieties for consultant with mobile: {}", consultantMobile);
 
         List<CropVariety> consultantVarieties = cropVarietyRepository.findByConsultantId(consultant.getId());
         Map<Long, ConsultantCropVarietiesResponse> groupedByCrop = new LinkedHashMap<>();
+
+        logger.info("Found {} crop varieties for consultant ID: {}", consultantVarieties.size(), consultant.getId());
 
         for (CropVariety variety : consultantVarieties) {
             if (variety.getCrop() == null || variety.getCrop().getId() == null) {
@@ -264,6 +290,7 @@ public class CropVarietyServiceImpl implements CropVarietyService {
             );
         }
 
+        logger.info("Returning {} grouped crops with varieties for consultant ID: {}", groupedByCrop.size(), consultant.getId());
         return new ArrayList<>(groupedByCrop.values());
     }
 
@@ -275,10 +302,13 @@ public class CropVarietyServiceImpl implements CropVarietyService {
                 .orElseThrow(() -> new ResourceNotFoundException("Consultant not found"));
 
         Long consultantUserId = consultant.getUser().getId();
+        logger.info("Fetching active summary for consultant with ID: {}", consultantUserId);
+
         long totalActiveFarmers = userProfileRepository
                 .countByConsultantIdAndUser_RoleAndUser_Status(consultantUserId, UserRole.FARMER, "ACTIVE");
         long totalActiveCropVarieties = farmerCropVarietyRepository.countActiveByConsultantUserId(consultantUserId);
 
+        logger.info("Consultant ID: {} has {} active farmers and {} active crop varieties", consultantUserId, totalActiveFarmers, totalActiveCropVarieties);
         return ConsultantActiveSummaryResponse.builder()
                 .totalActiveFarmers(totalActiveFarmers)
                 .totalActiveCropVarieties(totalActiveCropVarieties)
@@ -289,8 +319,11 @@ public class CropVarietyServiceImpl implements CropVarietyService {
     @Transactional(readOnly = true)
     public FarmerProfileResponse getCurrentFarmerProfile() {
         String farmerMobile = SecurityContextHolder.getContext().getAuthentication().getName();
+        logger.info("Fetching profile for current farmer with mobile: {}", farmerMobile);
+
         UserProfile farmer = userProfileRepository.findByUser_Mobile(farmerMobile)
                 .orElseThrow(() -> new ResourceNotFoundException("Farmer not found"));
+        logger.info("Found farmer with ID: {}", farmer.getId());
 
         // Build farmer info
         FarmerProfileResponse.FarmerInfo farmerInfo = FarmerProfileResponse.FarmerInfo.builder()
@@ -302,14 +335,20 @@ public class CropVarietyServiceImpl implements CropVarietyService {
         // Build personal info
         String farmSize = "10";
         String farmType = "N/A";
+        logger.info("Fetching farm size and type for farmer with ID: {}", farmer.getId());
+
         List<FarmerCropVariety> farmerCrops = farmerCropVarietyRepository.findByFarmerId(farmer.getId());
         if (!farmerCrops.isEmpty()) {
             FarmerCropVariety firstCrop = farmerCrops.get(0);
+            logger.info("Found {} crops for farmer ID: {}, using first crop variety ID: {} to determine farm size and type", farmerCrops.size(), farmer.getId(), firstCrop.getId());
+
             if (firstCrop.getTotalLand() != null) {
                 farmSize = firstCrop.getTotalLand() + " Acres";
+                logger.info("Determined farm size for farmer ID: {} is {}", farmer.getId(), farmSize);
             }
             if (firstCrop.getCropVariety() != null && firstCrop.getCropVariety().getCrop() != null) {
                 farmType = firstCrop.getCropVariety().getCrop().getName();
+                logger.info("Determined farm type for farmer ID: {} is {}", farmer.getId(), farmType);
             }
         }
 
@@ -325,6 +364,7 @@ public class CropVarietyServiceImpl implements CropVarietyService {
             district = farmer.getAddress().getDistrict();
             state = farmer.getAddress().getState();
             postalCode = farmer.getAddress().getPostalCode();
+            logger.info("Fetched address info for farmer ID: {} - Address: {}, City: {}, District: {}, State: {}, Postal Code: {}", farmer.getId(), addressLine, city, district, state, postalCode);
         }
 
         FarmerProfileResponse.PersonalInfo personalInfo = FarmerProfileResponse.PersonalInfo.builder()
@@ -342,6 +382,8 @@ public class CropVarietyServiceImpl implements CropVarietyService {
         FarmerProfileResponse.ConsultantInfo consultantInfo = null;
          if (farmer.getConsultant() != null) {
             // Load consultant's UserProfile from consultant User ID
+             logger.info("Fetching consultant profile for farmer ID: {} with consultant ID: {}", farmer.getId(), farmer.getConsultant().getId());
+
             UserProfile consultantProfile = userProfileRepository.findByUserId(farmer.getConsultant().getId())
                     .orElse(null);
             
@@ -353,9 +395,11 @@ public class CropVarietyServiceImpl implements CropVarietyService {
                         .consultantMobile(farmer.getConsultant().getMobile())
                         .consultantEmail(consultantProfile.getEmail())
                         .build();
+                logger.info("Fetched consultant info for farmer ID: {} - Consultant Name: {}, Mobile: {}, Email: {}", farmer.getId(), consultantInfo.getConsultantName(), consultantInfo.getConsultantMobile(), consultantInfo.getConsultantEmail());
             }
         }
 
+         logger.info("Returning FarmerProfileResponse for farmer ID: {} with farmerInfo: {}, personalInfo: {}, consultantInfo: {}", farmer.getId(), farmerInfo, personalInfo, consultantInfo);
         return FarmerProfileResponse.builder()
                 .farmerInfo(farmerInfo)
                 .personalInfo(personalInfo)
@@ -365,15 +409,20 @@ public class CropVarietyServiceImpl implements CropVarietyService {
 
     private CropVarietyResponse convertToCropVarietyResponse(CropVariety cropVariety) {
         String consultantName = "N/A";
+        logger.info("Converting CropVariety entity to CropVarietyResponse DTO for crop variety ID: {}", cropVariety.getId());
+
         if (cropVariety.getConsultant() != null) {
             consultantName = cropVariety.getConsultant().getFirstName() + " " + cropVariety.getConsultant().getLastName();
+            logger.info("Fetched consultant name for crop variety ID: {} - Consultant Name: {}", cropVariety.getId(), consultantName);
         }
 
         String cropName = "N/A";
         if (cropVariety.getCrop() != null) {
             cropName = cropVariety.getCrop().getName();
+            logger.info("Fetched crop name for crop variety ID: {} - Crop Name: {}", cropVariety.getId(), cropName);
         }
 
+        logger.info("Returning CropVarietyResponse for crop variety ID: {} with cropName: {}, consultantName: {}", cropVariety.getId(), cropName, consultantName);
         return CropVarietyResponse.builder()
                 .id(cropVariety.getId())
                 .cropId(cropVariety.getCrop() != null ? cropVariety.getCrop().getId() : null)
@@ -395,14 +444,17 @@ public class CropVarietyServiceImpl implements CropVarietyService {
         String cropName = "N/A";
         String yieldPotential = "N/A";
         Long cycleDurationDays = 0L;
+        logger.info("Converting FarmerCropVariety entity to FarmerCropVarietyResponse DTO for assignment ID: {}", farmerCropVariety.getId());
 
         if (farmerCropVariety.getCropVariety() != null) {
             cropVarietyName = farmerCropVariety.getCropVariety().getName();
             yieldPotential = farmerCropVariety.getCropVariety().getYieldPotential();
             cycleDurationDays = farmerCropVariety.getCropVariety().getCycleDurationDays();
+            logger.info("Fetched crop variety info for assignment ID: {} - Crop Variety Name: {}, Yield Potential: {}, Cycle Duration Days: {}", farmerCropVariety.getId(), cropVarietyName, yieldPotential, cycleDurationDays);
 
             if (farmerCropVariety.getCropVariety().getCrop() != null) {
                 cropName = farmerCropVariety.getCropVariety().getCrop().getName();
+                logger.info("Fetched crop name for assignment ID: {} - Crop Name: {}", farmerCropVariety.getId(), cropName);
             }
         }
 
@@ -412,18 +464,25 @@ public class CropVarietyServiceImpl implements CropVarietyService {
             LocalDate today = LocalDate.now();
             LocalDate sowingDate = farmerCropVariety.getSowingDate();
             LocalDate harvestDate = farmerCropVariety.getExpectedHarvestDate();
+            logger.info("Calculating progress percentage for assignment ID: {} - Sowing Date: {}, Expected Harvest Date: {}, Today: {}", farmerCropVariety.getId(), sowingDate, harvestDate, today);
 
             if (today.isBefore(sowingDate)) {
                 progressPercentage = 0;
+                logger.info("Today is before sowing date for assignment ID: {}, setting progress percentage to 0", farmerCropVariety.getId());
+
             } else if (today.isAfter(harvestDate)) {
                 progressPercentage = 100;
+                logger.info("Today is after expected harvest date for assignment ID: {}, setting progress percentage to 100", farmerCropVariety.getId());
+
             } else {
                 long totalDays = ChronoUnit.DAYS.between(sowingDate, harvestDate);
                 long daysElapsed = ChronoUnit.DAYS.between(sowingDate, today);
                 progressPercentage = totalDays > 0 ? (int) ((daysElapsed * 100) / totalDays) : 0;
+                logger.info("Calculated progress percentage for assignment ID: {} - Total Days: {}, Days Elapsed: {}, Progress Percentage: {}", farmerCropVariety.getId(), totalDays, daysElapsed, progressPercentage);
             }
         }
 
+        logger.info("Returning FarmerCropVarietyResponse for assignment ID: {} with cropVarietyName: {}, cropName: {}, progressPercentage: {}, yieldPotential: {}, cycleDurationDays: {}", farmerCropVariety.getId(), cropVarietyName, cropName, progressPercentage, yieldPotential, cycleDurationDays);
         return FarmerCropVarietyResponse.builder()
                 .id(farmerCropVariety.getId())
                 .cropVarietyId(farmerCropVariety.getCropVariety() != null ? farmerCropVariety.getCropVariety().getId() : null)
@@ -443,15 +502,19 @@ public class CropVarietyServiceImpl implements CropVarietyService {
     }
 
     private FarmerPortfolioResponse convertToFarmerPortfolioResponse(UserProfile farmer) {
+        logger.info("Converting UserProfile entity to FarmerPortfolioResponse DTO for farmer ID: {}", farmer.getId());
+
         List<String> crops = farmerCropVarietyRepository.findByFarmerId(farmer.getId())
                 .stream()
                 .map(fv -> fv.getCropVariety() != null ? fv.getCropVariety().getName() : "N/A")
                 .collect(Collectors.toList());
 
+        logger.info("Fetched {} crops for farmer ID: {}", crops.size(), farmer.getId());
         String location = "N/A";
         if (farmer.getAddress() != null) {
             location = farmer.getAddress().getCity() + ", " + farmer.getAddress().getState();
         }
+        logger.info("Determined location for farmer ID: {} - Location: {}", farmer.getId(), location);
 
         return FarmerPortfolioResponse.builder()
                 .id(farmer.getId())
