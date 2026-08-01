@@ -189,6 +189,53 @@ BEGIN
     SET NEW.updated_at = CURRENT_TIMESTAMP;
 END$$
 
+
+
+
+CREATE TABLE IF NOT EXISTS master_schedule_templates (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    consultant_id BIGINT NOT NULL,
+    crop_variety_id BIGINT NOT NULL,
+    version BIGINT,
+    description VARCHAR(255),
+    status VARCHAR(50),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (consultant_id) REFERENCES user_profiles(id) ON DELETE SET NULL,
+    FOREIGN KEY (crop_variety_id) REFERENCES crop_varieties(id) ON DELETE SET NULL
+);
+
+
+CREATE TABLE IF NOT EXISTS master_schedule_days (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    template_id BIGINT NOT NULL,
+    day_number BIGINT NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    description VARCHAR(255),
+    display_order BIGINT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (template_id) REFERENCES master_schedule_templates(id) ON DELETE SET NULL
+);
+
+
+
+CREATE TABLE IF NOT EXISTS master_schedule_tasks (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    schedule_day_id BIGINT NOT NULL,
+    fertilizer_name VARCHAR(255) NOT NULL,
+    quantity VARCHAR(255) NOT NULL,
+    proportion VARCHAR(50) NOT NULL,
+    priority BIGINT,
+    description VARCHAR(255) NOT NULL,
+    task_type VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (schedule_day_id) REFERENCES master_schedule_days(id) ON DELETE SET NULL
+);
+
+
+
 -- ==================== DEFAULT DATA ====================
 -- Insert default ADMIN user for system initialization
 -- Mobile: 9999999999, Password: admin (BCrypt hashed)

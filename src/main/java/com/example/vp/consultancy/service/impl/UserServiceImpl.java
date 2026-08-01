@@ -153,7 +153,8 @@ public class UserServiceImpl implements UserService {
 
         User farmer = new User();
         farmer.setMobile(request.getMobile());
-        String generatedPassword = generateRandomPassword(10);
+//        String generatedPassword = generateRandomPassword(10);
+        String generatedPassword = request.getMobile().substring(request.getMobile().length() - 4); // Last 4 digits of mobile
         farmer.setPassword(passwordEncoder.encode(generatedPassword));
         farmer.setRole(UserRole.FARMER);
         farmer.setStatus("ACTIVE");

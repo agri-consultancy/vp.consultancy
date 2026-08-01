@@ -160,11 +160,17 @@ public class SendScheduleServiceImpl implements SendScheduleService {
 
         List<FarmerCropVarietySchedule> schedules = farmerCropVarietyScheduleRepository
                 .findByFarmerCropVarietyIdOrderByIdAsc(farmerCropVarietyId);
+        logger.info("Fetched {} assigned schedules for FarmerCropVariety ID: {}", schedules.size(), farmerCropVarietyId);
 
-        List<FarmerScheduleResponse.AssignedScheduleDTO> assignedSchedules = schedules.stream()
-                .map(this::convertToAssignedSchedule)
+        List<ScheduleDayDTO> allScheduleDays = schedules.stream()
+                .flatMap(schedule -> {
+                    List<FarmerScheduleDay> sortedDays = schedule.getScheduleDays() == null ? List.of() : schedule.getScheduleDays().stream()
+                            .sorted(Comparator.comparing(FarmerScheduleDay::getDayNumber))
+                            .collect(Collectors.toList());
+                    return sortedDays.stream().map(this::convertFarmerDayToScheduleDay);
+                })
                 .collect(Collectors.toList());
-        logger.info("Fetched {} assigned schedules for FarmerCropVariety ID: {}", assignedSchedules.size(), farmerCropVarietyId);
+        logger.info("Merged all schedule days into a single flat array. Total days: {}", allScheduleDays.size());
 
         String mobile = farmer.getUser() != null ? farmer.getUser().getMobile() : null;
         String cropName = farmerCropVariety.getCropVariety() != null && farmerCropVariety.getCropVariety().getCrop() != null
@@ -174,8 +180,8 @@ public class SendScheduleServiceImpl implements SendScheduleService {
         logger.info("Preparing FarmerScheduleResponse for Farmer ID: {}, FarmerCropVariety ID: {}, Crop Name: {}, Crop Variety Name: {}",
                 farmer.getId(), farmerCropVarietyId, cropName, cropVarietyName);
 
-        logger.info("Returning FarmerScheduleResponse for Farmer ID: {}, FarmerCropVariety ID: {}, Total Assigned Schedules: {}",
-                farmer.getId(), farmerCropVarietyId, assignedSchedules.size());
+        logger.info("Returning FarmerScheduleResponse for Farmer ID: {}, FarmerCropVariety ID: {}, Total Days: {}",
+                farmer.getId(), farmerCropVarietyId, allScheduleDays.size());
         return FarmerScheduleResponse.builder()
                 .farmer(FarmerScheduleResponse.FarmerDetails.builder()
                         .farmerId(farmer.getId())
@@ -192,7 +198,7 @@ public class SendScheduleServiceImpl implements SendScheduleService {
                         .sowingDate(farmerCropVariety.getSowingDate())
                         .expectedHarvestDate(farmerCropVariety.getExpectedHarvestDate())
                         .build())
-                .schedules(assignedSchedules)
+                .scheduleDays(allScheduleDays)
                 .build();
     }
 
@@ -278,32 +284,6 @@ public class SendScheduleServiceImpl implements SendScheduleService {
                 .priority(request.getPriority())
                 .description(request.getTaskDescription())
                 .taskType(request.getTaskType())
-                .build();
-    }
-
-    private FarmerScheduleResponse.AssignedScheduleDTO convertToAssignedSchedule(FarmerCropVarietySchedule schedule) {
-        logger.info("Converting FarmerCropVarietySchedule with ID: {} to AssignedScheduleDTO", schedule.getId());
-
-        List<FarmerScheduleDay> sortedDays = schedule.getScheduleDays() == null ? List.of() : schedule.getScheduleDays().stream()
-                .sorted(Comparator.comparing(FarmerScheduleDay::getDayNumber))
-                .collect(Collectors.toList());
-
-        logger.info("Sorted {} FarmerScheduleDay entities by day number for schedule ID: {}", sortedDays.size(), schedule.getId());
-        List<ScheduleDayDTO> scheduleDays = sortedDays.stream()
-                .map(this::convertFarmerDayToScheduleDay)
-                .collect(Collectors.toList());
-
-        long startDay = sortedDays.isEmpty() ? 0L : sortedDays.get(0).getDayNumber();
-        long endDay = sortedDays.isEmpty() ? 0L : sortedDays.get(sortedDays.size() - 1).getDayNumber();
-        logger.info("Calculated startDay = {} and endDay = {} for AssignedScheduleDTO of schedule ID: {}", startDay, endDay, schedule.getId());
-
-        return FarmerScheduleResponse.AssignedScheduleDTO.builder()
-                .scheduleId(schedule.getId())
-                .startDate(schedule.getStartDate())
-                .startDay(startDay)
-                .endDay(endDay)
-                .daysSent((long) sortedDays.size())
-                .scheduleDays(scheduleDays)
                 .build();
     }
 

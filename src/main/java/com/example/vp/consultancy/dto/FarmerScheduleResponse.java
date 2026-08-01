@@ -15,7 +15,7 @@ import java.util.List;
 public class FarmerScheduleResponse {
     private FarmerDetails farmer;
     private CropVarietyDetails cropVariety;
-    private List<AssignedScheduleDTO> schedules;
+    private List<ScheduleDayDTO> scheduleDays;
 
     @Data
     @NoArgsConstructor
@@ -40,18 +40,5 @@ public class FarmerScheduleResponse {
         private String status;
         private LocalDate sowingDate;
         private LocalDate expectedHarvestDate;
-    }
-
-    @Data
-    @NoArgsConstructor
-    @AllArgsConstructor
-    @Builder
-    public static class AssignedScheduleDTO {
-        private Long scheduleId;
-        private LocalDate startDate;
-        private Long startDay;
-        private Long endDay;
-        private Long daysSent;
-        private List<ScheduleDayDTO> scheduleDays;
     }
 }
