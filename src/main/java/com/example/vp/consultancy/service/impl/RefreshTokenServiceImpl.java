@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.Assert;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -100,6 +101,20 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
         return refreshTokenRepository.findByToken(token);
     }
 
+    @Transactional(readOnly = true)
+    @Override
+    public List<RefreshToken> findByUserId(Long userId) {
+        Assert.notNull(userId, "User ID cannot be null");
+
+        if (userId <= 0) {
+            logger.error("Invalid user ID: {}. User ID must be positive.", userId);
+            throw new IllegalArgumentException("User ID must be positive");
+        }
+
+        logger.info("Searching for refresh tokens for user ID: {}", userId);
+        return refreshTokenRepository.findByUser_Id(userId);
+    }
+
     /**
      * {@inheritDoc}
      * 
@@ -118,6 +133,14 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
         logger.info("Checking expiration for refresh token: {} with expiry date: {}",
                     token.getToken(), token.getExpiryDate());
         return Instant.now().isAfter(token.getExpiryDate());
+    }
+
+    @Override
+    public void deleteByToken(String token) {
+        Assert.hasText(token, "Token cannot be null or empty");
+
+        logger.info("Deleting refresh token: {}", token);
+        refreshTokenRepository.deleteByToken(token);
     }
 
     /**
@@ -140,6 +163,6 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
         }
 
         logger.info("Deleting all refresh tokens for user ID: {}", userId);
-        refreshTokenRepository.deleteByUserId(userId);
+        refreshTokenRepository.deleteByUser_Id(userId);
     }
 }

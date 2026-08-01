@@ -8,6 +8,7 @@ import com.example.vp.consultancy.entity.User;
 import com.example.vp.consultancy.entity.UserProfile;
 import com.example.vp.consultancy.exception.InvalidCredentialsException;
 import com.example.vp.consultancy.exception.ResourceNotFoundException;
+import com.example.vp.consultancy.exception.UserAlreadyLoggedInException;
 import com.example.vp.consultancy.repository.UserProfileRepository;
 import com.example.vp.consultancy.repository.UserRepository;
 import com.example.vp.consultancy.service.AuthenticationService;
@@ -24,6 +25,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.util.Assert;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -72,6 +74,22 @@ public class AuthenticationServiceImpl implements AuthenticationService {
             );
             User user = userRepository.findByMobile(request.getMobile())
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+            List<RefreshToken> existingTokens = refreshTokenService.findByUserId(user.getId());
+            boolean hasActiveRefreshToken = false;
+            for (RefreshToken existingToken : existingTokens) {
+                if (refreshTokenService.isExpired(existingToken)) {
+                    refreshTokenService.deleteByToken(existingToken.getToken());
+                } else {
+                    hasActiveRefreshToken = true;
+                }
+            }
+
+            if (hasActiveRefreshToken) {
+                logger.warn("User {} already has an active refresh token. Rejecting login for single-device enforcement.", user.getMobile());
+                throw new UserAlreadyLoggedInException(
+                        "User is already logged in on another device. Please logout from the previous device first.");
+            }
 
             Map<String, Object> claims = new HashMap<>();
             claims.put("userId", user.getId());

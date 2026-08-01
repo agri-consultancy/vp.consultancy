@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -20,7 +21,12 @@ public interface RefreshTokenService {
     Optional<RefreshToken> findByToken(String token);
 
     @Transactional(readOnly = true)
+    List<RefreshToken> findByUserId(Long userId);
+
+    @Transactional(readOnly = true)
     boolean isExpired(RefreshToken token);
+
+    void deleteByToken(String token);
 
     void deleteByUserId(Long userId);
 
