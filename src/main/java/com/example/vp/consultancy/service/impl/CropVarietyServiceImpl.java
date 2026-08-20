@@ -16,12 +16,11 @@ import com.example.vp.consultancy.entity.FarmerCropVariety;
 import com.example.vp.consultancy.entity.UserProfile;
 import com.example.vp.consultancy.entity.UserRole;
 import com.example.vp.consultancy.exception.ResourceNotFoundException;
-import com.example.vp.consultancy.repository.CropRepository;
-import com.example.vp.consultancy.repository.CropVarietyRepository;
-import com.example.vp.consultancy.repository.FarmerCropVarietyRepository;
-import com.example.vp.consultancy.repository.UserProfileRepository;
-import com.example.vp.consultancy.repository.UserRepository;
+import com.example.vp.consultancy.repository.*;
 import com.example.vp.consultancy.service.CropVarietyService;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -47,20 +46,26 @@ public class CropVarietyServiceImpl implements CropVarietyService {
     private static final org.slf4j.Logger logger = LoggerFactory.getLogger(CropVarietyServiceImpl.class);
     private final CropVarietyRepository cropVarietyRepository;
     private final FarmerCropVarietyRepository farmerCropVarietyRepository;
+    private final FarmerCropVarietyScheduleRepository farmerCropVarietyScheduleRepository;
     private final CropRepository cropRepository;
     private final UserProfileRepository userProfileRepository;
 
     public CropVarietyServiceImpl(CropVarietyRepository cropVarietyRepository,
-                                 FarmerCropVarietyRepository farmerCropVarietyRepository,
-                                 CropRepository cropRepository,
-                                 UserProfileRepository userProfileRepository) {
+                                  FarmerCropVarietyRepository farmerCropVarietyRepository, FarmerCropVarietyScheduleRepository farmerCropVarietyScheduleRepository,
+                                  CropRepository cropRepository,
+                                  UserProfileRepository userProfileRepository) {
         this.cropVarietyRepository = cropVarietyRepository;
         this.farmerCropVarietyRepository = farmerCropVarietyRepository;
+        this.farmerCropVarietyScheduleRepository = farmerCropVarietyScheduleRepository;
         this.cropRepository = cropRepository;
         this.userProfileRepository = userProfileRepository;
     }
 
     @Override
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "consultantCropsWithVarieties", allEntries = true),
+            @CacheEvict(cacheNames = "activeTemplatesByConsultantAndVariety", allEntries = true)
+    })
     public CropVarietyResponse addCropVariety(CropVarietyRegistrationRequest request) {
         Assert.notNull(request, "Crop variety registration request cannot be null");
         Assert.notNull(request.getCropId(), "Crop ID is required");
@@ -95,6 +100,15 @@ public class CropVarietyServiceImpl implements CropVarietyService {
     }
 
     @Override
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "farmerCropsByFarmerId", key = "#farmerId"),
+            @CacheEvict(cacheNames = "currentFarmerCrops", allEntries = true),
+            @CacheEvict(cacheNames = "currentFarmerProfile", allEntries = true),
+            @CacheEvict(cacheNames = "farmersPortfolio", allEntries = true),
+            @CacheEvict(cacheNames = "farmerProfileDetail", key = "#farmerId"),
+            @CacheEvict(cacheNames = "consultantActiveSummary", allEntries = true),
+            @CacheEvict(cacheNames = "farmerScheduleByVariety", allEntries = true)
+    })
     public FarmerCropVarietyResponse assignCropVarietyToFarmer(Long farmerId, AssignCropVarietyRequest request) {
         Assert.notNull(farmerId, "Farmer ID is required");
         Assert.notNull(request, "Assignment request cannot be null");
@@ -128,6 +142,10 @@ public class CropVarietyServiceImpl implements CropVarietyService {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(
+            cacheNames = "farmersPortfolio",
+            key = "T(org.springframework.security.core.context.SecurityContextHolder).getContext().getAuthentication().getName()"
+    )
     public List<FarmerPortfolioResponse> getFarmersPortfolio() {
         // Get current consultant
         String consultantMobile = SecurityContextHolder.getContext().getAuthentication().getName();
@@ -145,6 +163,7 @@ public class CropVarietyServiceImpl implements CropVarietyService {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = "farmerProfileDetail", key = "#farmerId")
     public FarmerProfileDetailResponse getFarmerProfileDetail(Long farmerId) {
         Assert.notNull(farmerId, "Farmer ID is required");
 
@@ -197,6 +216,7 @@ public class CropVarietyServiceImpl implements CropVarietyService {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = "farmerCropsByFarmerId", key = "#farmerId")
     public List<FarmerCropVarietyResponse> getFarmerCrops(Long farmerId) {
         Assert.notNull(farmerId, "Farmer ID is required");
 
@@ -210,6 +230,10 @@ public class CropVarietyServiceImpl implements CropVarietyService {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(
+            cacheNames = "currentFarmerCrops",
+            key = "T(org.springframework.security.core.context.SecurityContextHolder).getContext().getAuthentication().getName()"
+    )
     public List<FarmerCropVarietyResponse> getCurrentFarmerCrops() {
         String farmerMobile = SecurityContextHolder.getContext().getAuthentication().getName();
         logger.info("Fetching assigned crops for current farmer with mobile: {}", farmerMobile);
@@ -221,6 +245,15 @@ public class CropVarietyServiceImpl implements CropVarietyService {
     }
 
     @Override
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "farmerCropsByFarmerId", key = "#farmerId"),
+            @CacheEvict(cacheNames = "currentFarmerCrops", allEntries = true),
+            @CacheEvict(cacheNames = "currentFarmerProfile", allEntries = true),
+            @CacheEvict(cacheNames = "farmersPortfolio", allEntries = true),
+            @CacheEvict(cacheNames = "farmerProfileDetail", key = "#farmerId"),
+            @CacheEvict(cacheNames = "consultantActiveSummary", allEntries = true),
+            @CacheEvict(cacheNames = "farmerScheduleByVariety", allEntries = true)
+    })
     public FarmerCropVarietyResponse updateFarmerCropVariety(Long farmerId, Long cropVarietyAssignmentId, AssignCropVarietyRequest request) {
         Assert.notNull(farmerId, "Farmer ID is required");
         Assert.notNull(cropVarietyAssignmentId, "Crop variety assignment ID is required");
@@ -251,6 +284,10 @@ public class CropVarietyServiceImpl implements CropVarietyService {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(
+            cacheNames = "consultantCropsWithVarieties",
+            key = "T(org.springframework.security.core.context.SecurityContextHolder).getContext().getAuthentication().getName()"
+    )
     public List<ConsultantCropVarietiesResponse> getConsultantCropsWithVarieties() {
         String consultantMobile = SecurityContextHolder.getContext().getAuthentication().getName();
         UserProfile consultant = userProfileRepository.findByUser_Mobile(consultantMobile)
@@ -296,6 +333,10 @@ public class CropVarietyServiceImpl implements CropVarietyService {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(
+            cacheNames = "consultantActiveSummary",
+            key = "T(org.springframework.security.core.context.SecurityContextHolder).getContext().getAuthentication().getName()"
+    )
     public ConsultantActiveSummaryResponse getConsultantActiveSummary() {
         String consultantMobile = SecurityContextHolder.getContext().getAuthentication().getName();
         UserProfile consultant = userProfileRepository.findByUser_Mobile(consultantMobile)
@@ -317,6 +358,10 @@ public class CropVarietyServiceImpl implements CropVarietyService {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(
+            cacheNames = "currentFarmerProfile",
+            key = "T(org.springframework.security.core.context.SecurityContextHolder).getContext().getAuthentication().getName()"
+    )
     public FarmerProfileResponse getCurrentFarmerProfile() {
         String farmerMobile = SecurityContextHolder.getContext().getAuthentication().getName();
         logger.info("Fetching profile for current farmer with mobile: {}", farmerMobile);
@@ -444,6 +489,7 @@ public class CropVarietyServiceImpl implements CropVarietyService {
         String cropName = "N/A";
         String yieldPotential = "N/A";
         Long cycleDurationDays = 0L;
+        Long lastSentDay = 0L;
         logger.info("Converting FarmerCropVariety entity to FarmerCropVarietyResponse DTO for assignment ID: {}", farmerCropVariety.getId());
 
         if (farmerCropVariety.getCropVariety() != null) {
@@ -451,7 +497,7 @@ public class CropVarietyServiceImpl implements CropVarietyService {
             yieldPotential = farmerCropVariety.getCropVariety().getYieldPotential();
             cycleDurationDays = farmerCropVariety.getCropVariety().getCycleDurationDays();
             logger.info("Fetched crop variety info for assignment ID: {} - Crop Variety Name: {}, Yield Potential: {}, Cycle Duration Days: {}", farmerCropVariety.getId(), cropVarietyName, yieldPotential, cycleDurationDays);
-
+            lastSentDay = farmerCropVarietyScheduleRepository.getLastSentDayByFarmerCropVarietyId(farmerCropVariety.getId());
             if (farmerCropVariety.getCropVariety().getCrop() != null) {
                 cropName = farmerCropVariety.getCropVariety().getCrop().getName();
                 logger.info("Fetched crop name for assignment ID: {} - Crop Name: {}", farmerCropVariety.getId(), cropName);
@@ -491,6 +537,7 @@ public class CropVarietyServiceImpl implements CropVarietyService {
                 .totalLand(farmerCropVariety.getTotalLand())
                 .totalPlants(farmerCropVariety.getTotalPlants())
                 .sowingDate(farmerCropVariety.getSowingDate() != null ? farmerCropVariety.getSowingDate().toString() : null)
+                .lastScheduleSentDay(lastSentDay != null ? lastSentDay : 0)
                 .expectedHarvestDate(farmerCropVariety.getExpectedHarvestDate() != null ? farmerCropVariety.getExpectedHarvestDate().toString() : null)
                 .status(farmerCropVariety.getStatus())
                 .progressPercentage(progressPercentage)

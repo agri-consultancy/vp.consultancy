@@ -34,6 +34,8 @@ public class FarmerCropVarietyResponse {
 
     private String sowingDate;
 
+    private Long lastScheduleSentDay;
+
     private String expectedHarvestDate;
 
     private String status;

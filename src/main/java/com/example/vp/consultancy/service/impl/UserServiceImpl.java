@@ -13,6 +13,9 @@ import com.example.vp.consultancy.repository.AddressRepository;
 import com.example.vp.consultancy.repository.UserProfileRepository;
 import com.example.vp.consultancy.repository.UserRepository;
 import com.example.vp.consultancy.service.UserService;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -130,11 +133,15 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "consultantFarmers", allEntries = true),
+            @CacheEvict(cacheNames = "farmersPortfolio", allEntries = true),
+            @CacheEvict(cacheNames = "consultantActiveSummary", allEntries = true)
+    })
     public UserResponse registerFarmer(FarmerRegistrationRequest request, Long consultantId) {
         Assert.notNull(request, "Farmer registration request cannot be null");
         Assert.notNull(consultantId, "Consultant ID cannot be null");
         Assert.hasText(request.getMobile(), "Mobile is required");
-        Assert.hasText(request.getEmail(), "Email is required");
         logger.info("Registering farmer with mobile: {} under consultant ID: {}", request.getMobile(), consultantId);
 
         User consultant = userRepository.findById(consultantId)
@@ -146,10 +153,10 @@ public class UserServiceImpl implements UserService {
             throw new DuplicateResourceException("Mobile number already registered");
         }
 
-        if (userProfileRepository.findByEmail(request.getEmail()).isPresent()) {
-            logger.error("Email {} already registered", request.getEmail());
-            throw new DuplicateResourceException("Email already registered");
-        }
+//        if (userProfileRepository.findByEmail(request.getEmail()).isPresent()) {
+//            logger.error("Email {} already registered", request.getEmail());
+//            throw new DuplicateResourceException("Email already registered");
+//        }
 
         User farmer = new User();
         farmer.setMobile(request.getMobile());
@@ -227,6 +234,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = "consultantFarmers", key = "#consultantId")
     public List<UserResponse> getAllFarmers(Long consultantId) {
         Assert.notNull(consultantId, "Consultant ID cannot be null");
         logger.info("Fetching all farmers for consultant ID: {}", consultantId);

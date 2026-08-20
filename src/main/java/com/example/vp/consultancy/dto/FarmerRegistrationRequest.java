@@ -6,6 +6,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import jakarta.validation.constraints.*;
+import org.springframework.boot.context.properties.bind.DefaultValue;
 
 /**
  * Farmer Registration Request DTO - For consultants to register their farmers
@@ -34,26 +35,18 @@ public class FarmerRegistrationRequest {
     @Size(min = 2, max = 100, message = "Last name must be between 2 and 100 characters")
     private String lastName;
 
-    @NotBlank(message = "Email is required")
-    @Email(message = "Email should be valid")
     private String email;
 
-    @NotBlank(message = "Address line is required")
     private String addressLine;
 
-    @NotBlank(message = "City is required")
     private String city;
 
-    @NotBlank(message = "District is required")
-    private String district;
+    private String district = "Sangli";
 
-    @NotBlank(message = "State is required")
-    private String state;
+    private String state = "Maharashtra"; // Default value for state
 
-    @NotBlank(message = "Postal code is required")
     private String postalCode;
 
-    @NotBlank(message = "Primary sector is required")
     @Size(min = 2, max = 100, message = "Sector must be between 2 and 100 characters")
     private String sector;
 }

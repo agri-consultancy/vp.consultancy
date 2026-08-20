@@ -19,10 +19,8 @@ import java.util.List;
 public class SendScheduleDayRequest {
 
     @NotNull(message = "dayNumber is required")
-    @Positive(message = "dayNumber must be positive")
     private Long dayNumber;
 
-    @NotBlank(message = "dayTitle is required")
     private String dayTitle;
 
     private String dayDescription;

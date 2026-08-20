@@ -13,6 +13,7 @@ import java.util.List;
 @Builder
 public class ScheduleDayDTO {
     private Long dayNumber;
+    private Long masterDayNumber;
     private String dayTitle;
     private String dayDescription;
     private List<ScheduleTaskDTO> tasks;

@@ -17,6 +17,8 @@ public class GetNextSchedulePreviewResponse {
     private Long masterScheduleTemplateId;
     private Long startDay;
     private Long endDay;
+    private Long masterStartDay;
+    private Long masterEndDay;
     private Long totalDays;
     private List<ScheduleDayDTO> scheduleDays;
 }

@@ -85,7 +85,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 }
             }
 
-            if (hasActiveRefreshToken) {
+            if ("FARMER".equals(user.getRole()) && hasActiveRefreshToken) {
                 logger.warn("User {} already has an active refresh token. Rejecting login for single-device enforcement.", user.getMobile());
                 throw new UserAlreadyLoggedInException(
                         "User is already logged in on another device. Please logout from the previous device first.");

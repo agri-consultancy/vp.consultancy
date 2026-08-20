@@ -1,6 +1,7 @@
 package com.example.vp.consultancy.controller;
 
-import com.example.vp.consultancy.config.JwtAuthenticationFilter;
+import com.example.vp.consultancy.dto.AddScheduleGapRequest;
+import com.example.vp.consultancy.dto.AddScheduleGapResponse;
 import com.example.vp.consultancy.dto.ApiResponse;
 import com.example.vp.consultancy.dto.GetNextSchedulePreviewRequest;
 import com.example.vp.consultancy.dto.GetNextSchedulePreviewResponse;
@@ -53,6 +54,19 @@ public class SendScheduleController {
         return ResponseEntity.status(HttpStatus.CREATED).body(new ApiResponse<>(
                 true,
                 "Schedule sent successfully",
+                response,
+                HttpStatus.CREATED.value()
+        ));
+    }
+
+    @PostMapping("/schedules/gap")
+    public ResponseEntity<ApiResponse<AddScheduleGapResponse>> addScheduleGap(@Valid @RequestBody AddScheduleGapRequest request) {
+        logger.info("Received request to add schedule gap: {}", request);
+        AddScheduleGapResponse response = sendScheduleService.addScheduleGap(request);
+        logger.info("Schedule gap added successfully: {}", response);
+        return ResponseEntity.status(HttpStatus.CREATED).body(new ApiResponse<>(
+                true,
+                "Schedule gap added successfully",
                 response,
                 HttpStatus.CREATED.value()
         ));

@@ -9,6 +9,9 @@ import com.example.vp.consultancy.exception.ResourceNotFoundException;
 import com.example.vp.consultancy.repository.ConsultantAdvertisementRepository;
 import com.example.vp.consultancy.repository.UserProfileRepository;
 import com.example.vp.consultancy.service.ConsultantAdvertisementService;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -40,6 +43,10 @@ public class ConsultantAdvertisementServiceImpl implements ConsultantAdvertiseme
     }
 
     @Override
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "consultantAdvertisements", allEntries = true),
+            @CacheEvict(cacheNames = "allConsultantAdvertisements", allEntries = true)
+    })
     public ConsultantAdvertisementResponse addAdvertisement(ConsultantAdvertisementRequest request) {
         Assert.notNull(request, "Advertisement request cannot be null");
         Assert.hasText(request.getUrl(), "URL is required");
@@ -72,6 +79,10 @@ public class ConsultantAdvertisementServiceImpl implements ConsultantAdvertiseme
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(
+            cacheNames = "consultantAdvertisements",
+            key = "T(org.springframework.security.core.context.SecurityContextHolder).getContext().getAuthentication().getName()"
+    )
     public List<ConsultantAdvertisementResponse> getConsultantAdvertisements() {
         // Get current consultant
         String consultantMobile = SecurityContextHolder.getContext()
@@ -89,6 +100,7 @@ public class ConsultantAdvertisementServiceImpl implements ConsultantAdvertiseme
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = "allConsultantAdvertisements")
     public List<ConsultantAdvertisementResponse> getAllAdvertisements() {
         logger.info("Fetching all advertisements");
         return advertisementRepository.findAllOrderByPriority()
@@ -98,6 +110,10 @@ public class ConsultantAdvertisementServiceImpl implements ConsultantAdvertiseme
     }
 
     @Override
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "consultantAdvertisements", allEntries = true),
+            @CacheEvict(cacheNames = "allConsultantAdvertisements", allEntries = true)
+    })
     public ConsultantAdvertisementResponse updateAdvertisement(Long advertisementId, ConsultantAdvertisementRequest request) {
         Assert.notNull(advertisementId, "Advertisement ID cannot be null");
         Assert.notNull(request, "Advertisement request cannot be null");
@@ -135,6 +151,10 @@ public class ConsultantAdvertisementServiceImpl implements ConsultantAdvertiseme
     }
 
     @Override
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "consultantAdvertisements", allEntries = true),
+            @CacheEvict(cacheNames = "allConsultantAdvertisements", allEntries = true)
+    })
     public void deleteAdvertisement(Long advertisementId) {
         Assert.notNull(advertisementId, "Advertisement ID cannot be null");
 

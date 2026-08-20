@@ -2,6 +2,7 @@ package com.example.vp.consultancy.repository;
 
 import com.example.vp.consultancy.entity.FarmerCropVarietySchedule;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -14,4 +15,7 @@ public interface FarmerCropVarietyScheduleRepository extends JpaRepository<Farme
             Long farmerId, Long farmerCropVarietyId);
 
     List<FarmerCropVarietySchedule> findByFarmerCropVarietyIdOrderByIdAsc(Long farmerCropVarietyId);
+
+    @Query("SELECT MAX(s.lastSentDay) FROM FarmerCropVarietySchedule s WHERE s.farmerCropVariety.id = :id")
+    Long getLastSentDayByFarmerCropVarietyId(Long id);
 }

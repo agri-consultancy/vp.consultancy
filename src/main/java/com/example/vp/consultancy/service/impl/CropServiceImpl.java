@@ -8,6 +8,9 @@ import com.example.vp.consultancy.exception.DuplicateResourceException;
 import com.example.vp.consultancy.exception.ResourceNotFoundException;
 import com.example.vp.consultancy.repository.CropRepository;
 import com.example.vp.consultancy.service.CropService;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Caching;
+import org.springframework.cache.annotation.Cacheable;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,6 +35,10 @@ public class CropServiceImpl implements CropService {
     }
 
     @Override
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "cropsAll", allEntries = true),
+            @CacheEvict(cacheNames = "consultantCropsWithVarieties", allEntries = true)
+    })
     public CropResponse addCrop(CropRegistrationRequest request) {
         Assert.notNull(request, "Crop registration request cannot be null");
         Assert.hasText(request.getName(), "Crop name is required");
@@ -54,6 +61,7 @@ public class CropServiceImpl implements CropService {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = "cropsAll")
     public List<CropResponse> getAllCrops() {
         logger.info("Fetching all crops from the database");
         return cropRepository.findAllByOrderByNameAsc()
@@ -64,6 +72,7 @@ public class CropServiceImpl implements CropService {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = "cropById", key = "#cropId")
     public CropResponse getCropById(Long cropId) {
         Assert.notNull(cropId, "Crop ID cannot be null");
         logger.info("Fetching crop with ID: {}", cropId);

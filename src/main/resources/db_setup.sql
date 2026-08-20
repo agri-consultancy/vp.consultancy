@@ -111,6 +111,7 @@ CREATE TABLE IF NOT EXISTS farmer_crop_variety_schedule (
     farmer_crop_variety_id BIGINT NOT NULL COMMENT 'Reference to farmer crop variety assignment',
     start_date DATE COMMENT 'Date when this schedule batch was sent',
     last_sent_day BIGINT NOT NULL COMMENT 'Last day number included in this batch',
+    last_sent_master_day BIGINT COMMENT 'Last master schedule day included in this batch',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (farmer_id) REFERENCES user_profiles(id) ON DELETE CASCADE,
@@ -119,6 +120,20 @@ CREATE TABLE IF NOT EXISTS farmer_crop_variety_schedule (
     INDEX idx_fcv_schedule_variety (farmer_crop_variety_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 COMMENT 'Sent schedule batches for farmer crop assignments';
+
+CREATE TABLE IF NOT EXISTS farmer_schedule_gaps (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    farmer_id BIGINT NOT NULL COMMENT 'Reference to farmer user profile',
+    farmer_crop_variety_id BIGINT NOT NULL COMMENT 'Reference to farmer crop variety assignment',
+    gap_days BIGINT NOT NULL COMMENT 'Number of farmer-side empty days inserted before the next master day mapping',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (farmer_id) REFERENCES user_profiles(id) ON DELETE CASCADE,
+    FOREIGN KEY (farmer_crop_variety_id) REFERENCES farmer_crop_varieties(id) ON DELETE CASCADE,
+    INDEX idx_farmer_schedule_gap_farmer (farmer_id),
+    INDEX idx_farmer_schedule_gap_variety (farmer_crop_variety_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+COMMENT 'Farmer-side gap history used to offset master schedule day mapping';
 
 CREATE TABLE IF NOT EXISTS farmer_schedule_days (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,

@@ -68,7 +68,7 @@ public class AuthController {
      * @throws RateLimitExceededException if rate limit is exceeded
      */
     @PostMapping("/login")
-    @RateLimit(limit = 5, windowSize = 60)
+    @RateLimit(limit = 10, windowSize = 60)
     public ResponseEntity<ApiResponse<LoginResponse>> login(@Valid @RequestBody LoginRequest request) {
         logger.info("Login attempt for mobile: {}", request.getMobile());
         LoginResponse response = authenticationService.login(request);

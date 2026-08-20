@@ -5,6 +5,9 @@ import com.example.vp.consultancy.entity.*;
 import com.example.vp.consultancy.repository.*;
 import com.example.vp.consultancy.util.ExcelScheduleProcessor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,12 +42,14 @@ public class MasterScheduleService {
 
     // ==================== Template Operations ====================
 
+    @Cacheable(cacheNames = "templatesByConsultant", key = "#consultantId")
     public List<MasterScheduleTemplateDTO> getAllTemplatesByConsultant(Long consultantId) {
         List<MasterScheduleTemplate> templates = templateRepository.findByConsultantId(consultantId);
         return templates.stream().map(this::convertTemplateToDTO).collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = "activeTemplatesByConsultantAndVariety", key = "#consultantId + ':' + #cropVarietyId")
     public List<MasterScheduleTemplateDTO> getActiveTemplatesByConsultantAndCropVariety(
             Long consultantId, Long cropVarietyId) {
         cropVarietyRepository.findByIdAndConsultantId(cropVarietyId, consultantId)
@@ -57,6 +62,7 @@ public class MasterScheduleService {
         return templates.stream().map(this::convertTemplateToDTO).collect(Collectors.toList());
     }
 
+    @Cacheable(cacheNames = "templateById", key = "#templateId")
     public MasterScheduleTemplateWithDaysDTO getTemplateById(Long templateId) {
         MasterScheduleTemplate template = templateRepository.findById(templateId)
             .orElseThrow(() -> new IllegalArgumentException("Template not found with ID: " + templateId));
@@ -64,6 +70,14 @@ public class MasterScheduleService {
     }
 
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "templatesByConsultant", allEntries = true),
+            @CacheEvict(cacheNames = "activeTemplatesByConsultantAndVariety", allEntries = true),
+            @CacheEvict(cacheNames = "templateById", allEntries = true),
+            @CacheEvict(cacheNames = "templateDayById", allEntries = true),
+            @CacheEvict(cacheNames = "templateTaskById", allEntries = true),
+            @CacheEvict(cacheNames = "schedulePreview", allEntries = true)
+    })
     public TemplateImportResponseDTO importScheduleFromExcel(
             Long consultantId,
             CreateTemplateRequestDTO requestDTO,
@@ -170,6 +184,14 @@ public class MasterScheduleService {
     }
 
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "templatesByConsultant", allEntries = true),
+            @CacheEvict(cacheNames = "activeTemplatesByConsultantAndVariety", allEntries = true),
+            @CacheEvict(cacheNames = "templateById", key = "#templateId"),
+            @CacheEvict(cacheNames = "templateDayById", allEntries = true),
+            @CacheEvict(cacheNames = "templateTaskById", allEntries = true),
+            @CacheEvict(cacheNames = "schedulePreview", allEntries = true)
+    })
     public MasterScheduleTemplateDTO updateTemplate(Long templateId, UpdateTemplateRequestDTO requestDTO) {
         MasterScheduleTemplate template = templateRepository.findById(templateId)
             .orElseThrow(() -> new IllegalArgumentException("Template not found with ID: " + templateId));
@@ -186,6 +208,14 @@ public class MasterScheduleService {
     }
 
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "templatesByConsultant", allEntries = true),
+            @CacheEvict(cacheNames = "activeTemplatesByConsultantAndVariety", allEntries = true),
+            @CacheEvict(cacheNames = "templateById", key = "#templateId"),
+            @CacheEvict(cacheNames = "templateDayById", allEntries = true),
+            @CacheEvict(cacheNames = "templateTaskById", allEntries = true),
+            @CacheEvict(cacheNames = "schedulePreview", allEntries = true)
+    })
     public void deleteTemplate(Long templateId) {
         if (!templateRepository.existsById(templateId)) {
             throw new IllegalArgumentException("Template not found with ID: " + templateId);
@@ -196,6 +226,12 @@ public class MasterScheduleService {
     // ==================== Day Operations ====================
 
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "templateById", key = "#templateId"),
+            @CacheEvict(cacheNames = "templateDayById", allEntries = true),
+            @CacheEvict(cacheNames = "templateTaskById", allEntries = true),
+            @CacheEvict(cacheNames = "schedulePreview", allEntries = true)
+    })
     public MasterScheduleDayDTO addDay(Long templateId, CreateDayRequestDTO requestDTO) {
         MasterScheduleTemplate template = templateRepository.findById(templateId)
             .orElseThrow(() -> new IllegalArgumentException("Template not found with ID: " + templateId));
@@ -217,6 +253,7 @@ public class MasterScheduleService {
         return convertDayToDTO(day);
     }
 
+    @Cacheable(cacheNames = "templateDayById", key = "#templateId + ':' + #dayId")
     public MasterScheduleDayDTO getDayById(Long templateId, Long dayId) {
         MasterScheduleDay day = dayRepository.findById(dayId)
             .orElseThrow(() -> new IllegalArgumentException("Day not found with ID: " + dayId));
@@ -229,6 +266,12 @@ public class MasterScheduleService {
     }
 
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "templateById", key = "#templateId"),
+            @CacheEvict(cacheNames = "templateDayById", key = "#templateId + ':' + #dayId"),
+            @CacheEvict(cacheNames = "templateTaskById", allEntries = true),
+            @CacheEvict(cacheNames = "schedulePreview", allEntries = true)
+    })
     public MasterScheduleDayDTO updateDay(Long templateId, Long dayId, CreateDayRequestDTO requestDTO) {
         MasterScheduleDay day = dayRepository.findById(dayId)
             .orElseThrow(() -> new IllegalArgumentException("Day not found with ID: " + dayId));
@@ -255,6 +298,12 @@ public class MasterScheduleService {
     }
 
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "templateById", key = "#templateId"),
+            @CacheEvict(cacheNames = "templateDayById", key = "#templateId + ':' + #dayId"),
+            @CacheEvict(cacheNames = "templateTaskById", allEntries = true),
+            @CacheEvict(cacheNames = "schedulePreview", allEntries = true)
+    })
     public void deleteDay(Long templateId, Long dayId) {
         MasterScheduleDay day = dayRepository.findById(dayId)
             .orElseThrow(() -> new IllegalArgumentException("Day not found with ID: " + dayId));
@@ -269,6 +318,12 @@ public class MasterScheduleService {
     // ==================== Task Operations ====================
 
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "templateById", key = "#templateId"),
+            @CacheEvict(cacheNames = "templateDayById", key = "#templateId + ':' + #dayId"),
+            @CacheEvict(cacheNames = "templateTaskById", allEntries = true),
+            @CacheEvict(cacheNames = "schedulePreview", allEntries = true)
+    })
     public MasterScheduleTaskDTO addTask(Long templateId, Long dayId, CreateTaskRequestDTO requestDTO) {
         MasterScheduleDay day = dayRepository.findById(dayId)
             .orElseThrow(() -> new IllegalArgumentException("Day not found with ID: " + dayId));
@@ -290,6 +345,7 @@ public class MasterScheduleService {
         return convertTaskToDTO(task);
     }
 
+    @Cacheable(cacheNames = "templateTaskById", key = "#templateId + ':' + #dayId + ':' + #taskId")
     public MasterScheduleTaskDTO getTaskById(Long templateId, Long dayId, Long taskId) {
         MasterScheduleTask task = taskRepository.findById(taskId)
             .orElseThrow(() -> new IllegalArgumentException("Task not found with ID: " + taskId));
@@ -307,6 +363,12 @@ public class MasterScheduleService {
     }
 
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "templateById", key = "#templateId"),
+            @CacheEvict(cacheNames = "templateDayById", key = "#templateId + ':' + #dayId"),
+            @CacheEvict(cacheNames = "templateTaskById", key = "#templateId + ':' + #dayId + ':' + #taskId"),
+            @CacheEvict(cacheNames = "schedulePreview", allEntries = true)
+    })
     public MasterScheduleTaskDTO updateTask(Long templateId, Long dayId, Long taskId, CreateTaskRequestDTO requestDTO) {
         MasterScheduleTask task = taskRepository.findById(taskId)
             .orElseThrow(() -> new IllegalArgumentException("Task not found with ID: " + taskId));
@@ -332,6 +394,12 @@ public class MasterScheduleService {
     }
 
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "templateById", key = "#templateId"),
+            @CacheEvict(cacheNames = "templateDayById", key = "#templateId + ':' + #dayId"),
+            @CacheEvict(cacheNames = "templateTaskById", key = "#templateId + ':' + #dayId + ':' + #taskId"),
+            @CacheEvict(cacheNames = "schedulePreview", allEntries = true)
+    })
     public void deleteTask(Long templateId, Long dayId, Long taskId) {
         MasterScheduleTask task = taskRepository.findById(taskId)
             .orElseThrow(() -> new IllegalArgumentException("Task not found with ID: " + taskId));
