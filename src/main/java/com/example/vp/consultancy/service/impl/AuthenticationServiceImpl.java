@@ -5,6 +5,7 @@ import com.example.vp.consultancy.config.JwtTokenUtil;
 import com.example.vp.consultancy.dto.*;
 import com.example.vp.consultancy.entity.RefreshToken;
 import com.example.vp.consultancy.entity.User;
+import com.example.vp.consultancy.entity.UserRole;
 import com.example.vp.consultancy.entity.UserProfile;
 import com.example.vp.consultancy.exception.InvalidCredentialsException;
 import com.example.vp.consultancy.exception.ResourceNotFoundException;
@@ -85,7 +86,9 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 }
             }
 
-            if ("FARMER".equals(user.getRole()) && hasActiveRefreshToken) {
+            // Enforce single active session for FARMER role only.
+            // Compare using the UserRole enum to avoid incorrect String vs enum comparisons.
+            if (UserRole.FARMER.equals(user.getRole()) && hasActiveRefreshToken) {
                 logger.warn("User {} already has an active refresh token. Rejecting login for single-device enforcement.", user.getMobile());
                 throw new UserAlreadyLoggedInException(
                         "User is already logged in on another device. Please logout from the previous device first.");

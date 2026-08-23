@@ -127,7 +127,9 @@ public class CropVarietyServiceImpl implements CropVarietyService {
         FarmerCropVariety farmerCropVariety = new FarmerCropVariety();
         farmerCropVariety.setFarmer(farmer);
         farmerCropVariety.setCropVariety(cropVariety);
-        farmerCropVariety.setTotalLand(request.getTotalLand());
+        farmerCropVariety.setPlantToPlantSpacing(request.getPlantToPlantSpacing());
+        farmerCropVariety.setRowToRowSpacing(request.getRowToRowSpacing());
+        farmerCropVariety.setTotalLand((request.getPlantToPlantSpacing()*request.getRowToRowSpacing()*request.getTotalPlants())/1089);
         farmerCropVariety.setTotalPlants(request.getTotalPlants());
         farmerCropVariety.setSowingDate(request.getSowingDate());
         farmerCropVariety.setExpectedHarvestDate(request.getExpectedHarvestDate());
@@ -269,7 +271,9 @@ public class CropVarietyServiceImpl implements CropVarietyService {
             throw new ResourceNotFoundException("Assignment does not belong to this farmer");
         }
 
-        assignment.setTotalLand(request.getTotalLand());
+        assignment.setPlantToPlantSpacing(request.getPlantToPlantSpacing());
+        assignment.setRowToRowSpacing(request.getRowToRowSpacing());
+        assignment.setTotalLand((request.getPlantToPlantSpacing()*request.getRowToRowSpacing()*request.getTotalPlants())/1089);
         assignment.setTotalPlants(request.getTotalPlants());
         assignment.setSowingDate(request.getSowingDate());
         assignment.setExpectedHarvestDate(request.getExpectedHarvestDate());
@@ -388,7 +392,7 @@ public class CropVarietyServiceImpl implements CropVarietyService {
             logger.info("Found {} crops for farmer ID: {}, using first crop variety ID: {} to determine farm size and type", farmerCrops.size(), farmer.getId(), firstCrop.getId());
 
             if (firstCrop.getTotalLand() != null) {
-                farmSize = firstCrop.getTotalLand() + " Acres";
+                farmSize = firstCrop.getTotalLand().toString();
                 logger.info("Determined farm size for farmer ID: {} is {}", farmer.getId(), farmSize);
             }
             if (firstCrop.getCropVariety() != null && firstCrop.getCropVariety().getCrop() != null) {
@@ -534,6 +538,8 @@ public class CropVarietyServiceImpl implements CropVarietyService {
                 .cropVarietyId(farmerCropVariety.getCropVariety() != null ? farmerCropVariety.getCropVariety().getId() : null)
                 .cropVarietyName(cropVarietyName)
                 .cropName(cropName)
+                .plantToPlantSpacing(farmerCropVariety.getPlantToPlantSpacing())
+                .rowToRowSpacing(farmerCropVariety.getRowToRowSpacing())
                 .totalLand(farmerCropVariety.getTotalLand())
                 .totalPlants(farmerCropVariety.getTotalPlants())
                 .sowingDate(farmerCropVariety.getSowingDate() != null ? farmerCropVariety.getSowingDate().toString() : null)

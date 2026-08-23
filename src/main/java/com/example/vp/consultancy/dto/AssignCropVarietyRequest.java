@@ -21,9 +21,13 @@ public class AssignCropVarietyRequest {
     @NotNull(message = "Crop variety ID is required")
     private Long cropVarietyId;
 
-    @NotNull(message = "Total land is required")
-    @Min(value = 0, message = "Total land must be greater than 0")
-    private Double totalLand;
+    @NotNull(message = "Total plant to plant spacing is required")
+    @Min(value = 0, message = "Total plant to plant spacing must be greater than 0")
+    private Double plantToPlantSpacing;
+
+    @NotNull(message = "Total row to row spacing is required")
+    @Min(value = 0, message = "Total row to row spacing must be greater than 0")
+    private Double rowToRowSpacing;
 
     @Min(value = 0, message = "Total plants must be greater than or equal to 0")
     private Integer totalPlants;

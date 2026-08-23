@@ -40,6 +40,12 @@ public class FarmerCropVariety {
     private Double totalLand;
 
     @Column
+    private Double plantToPlantSpacing;
+
+    @Column
+    private Double rowToRowSpacing;
+
+    @Column
     private Integer totalPlants;
 
     @Column

@@ -28,6 +28,10 @@ public class FarmerCropVarietyResponse {
 
     private String cropIcon;
 
+    private Double plantToPlantSpacing;
+
+    private Double rowToRowSpacing;
+
     private Double totalLand;
 
     private Integer totalPlants;
