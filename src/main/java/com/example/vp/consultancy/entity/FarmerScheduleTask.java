@@ -40,7 +40,7 @@ public class FarmerScheduleTask {
     @Column(nullable = false, length = 255)
     private String quantity;
 
-    @Column(nullable = false, length = 50)
+    @Column(length = 50)
     private String proportion;
 
     @Column
