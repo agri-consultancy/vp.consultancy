@@ -1,7 +1,5 @@
 package com.example.vp.consultancy.dto;
 
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -11,18 +9,17 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class CreateTaskRequestDTO {
-    @NotBlank(message = "Fertilizer name is required")
-    private String fertilizerName;
-    
-    @NotBlank(message = "Quantity is required")
-    private String quantity;
-    
-    private String proportion;
-    
-    private Long priority;
-    
-    private String description;
-    
+public class UpdateScheduleTaskRequest {
+
     private String taskType;
+
+    private String taskDescription;
+
+    private String fertilizerName;
+
+    private String quantity;
+
+    private String proportion;
+
+    private Long priority;
 }

@@ -21,7 +21,9 @@ import com.example.vp.consultancy.entity.UserProfile;
 import com.example.vp.consultancy.exception.VPException;
 import com.example.vp.consultancy.repository.FarmerCropVarietyRepository;
 import com.example.vp.consultancy.repository.FarmerCropVarietyScheduleRepository;
+import com.example.vp.consultancy.repository.FarmerScheduleDayRepository;
 import com.example.vp.consultancy.repository.FarmerScheduleGapRepository;
+import com.example.vp.consultancy.repository.FarmerScheduleTaskRepository;
 import com.example.vp.consultancy.repository.MasterScheduleDayRepository;
 import com.example.vp.consultancy.repository.MasterScheduleTemplateRepository;
 import com.example.vp.consultancy.repository.UserProfileRepository;
@@ -48,6 +50,8 @@ class SendScheduleServiceImplTest {
     private MasterScheduleDayRepository masterScheduleDayRepository;
     private FarmerCropVarietyScheduleRepository farmerCropVarietyScheduleRepository;
     private FarmerScheduleGapRepository farmerScheduleGapRepository;
+    private FarmerScheduleDayRepository farmerScheduleDayRepository;
+    private FarmerScheduleTaskRepository farmerScheduleTaskRepository;
     private SendScheduleServiceImpl service;
 
     @BeforeEach
@@ -58,6 +62,8 @@ class SendScheduleServiceImplTest {
         masterScheduleDayRepository = mock(MasterScheduleDayRepository.class);
         farmerCropVarietyScheduleRepository = mock(FarmerCropVarietyScheduleRepository.class);
         farmerScheduleGapRepository = mock(FarmerScheduleGapRepository.class);
+        farmerScheduleDayRepository = mock(FarmerScheduleDayRepository.class);
+        farmerScheduleTaskRepository = mock(FarmerScheduleTaskRepository.class);
 
         service = new SendScheduleServiceImpl(
                 userProfileRepository,
@@ -65,7 +71,9 @@ class SendScheduleServiceImplTest {
                 masterScheduleTemplateRepository,
                 masterScheduleDayRepository,
                 farmerCropVarietyScheduleRepository,
-                farmerScheduleGapRepository
+                farmerScheduleGapRepository,
+                farmerScheduleDayRepository,
+                farmerScheduleTaskRepository
         );
     }
 

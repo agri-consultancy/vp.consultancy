@@ -247,6 +247,35 @@ public class  ConsultantController {
     }
 
     /**
+     * Updates an existing crop variety created by the current consultant.
+     *
+     * Rate limited to 20 requests per 60 seconds.
+     * Only accessible to users with CONSULTANT role.
+     * Only the consultant who created the variety can update it.
+     *
+     * @param cropVarietyId the crop variety ID to update
+     * @param request the updated crop variety registration request
+     * @return ResponseEntity with ApiResponse containing updated crop variety
+     * @throws ResourceNotFoundException if variety not found or not owned by current consultant
+     * @throws RateLimitExceededException if rate limit is exceeded
+     */
+    @PutMapping("/crop-varieties/{cropVarietyId}")
+    @RateLimit(limit = 20, windowSize = 60)
+    public ResponseEntity<ApiResponse<CropVarietyResponse>> updateCropVariety(
+            @PathVariable Long cropVarietyId,
+            @Valid @RequestBody CropVarietyRegistrationRequest request) {
+        logger.info("Updating crop variety ID: {} with name: {} and climate: {} and cycle duration: {} days", cropVarietyId, request.getName(), request.getClimate(), request.getCycleDurationDays());
+        CropVarietyResponse response = cropVarietyService.updateCropVariety(cropVarietyId, request);
+        logger.info("Crop variety updated successfully: {}", response);
+        return ResponseEntity.ok(new ApiResponse<>(
+                true,
+                "Crop variety updated successfully",
+                response,
+                HttpStatus.OK.value()
+        ));
+    }
+
+    /**
      * Retrieves active master schedules for a crop variety owned by the current consultant.
      *
      * Only accessible to users with CONSULTANT role.

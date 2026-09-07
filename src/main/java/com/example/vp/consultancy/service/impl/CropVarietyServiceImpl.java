@@ -101,6 +101,51 @@ public class CropVarietyServiceImpl implements CropVarietyService {
 
     @Override
     @Caching(evict = {
+            @CacheEvict(cacheNames = "consultantCropsWithVarieties", allEntries = true),
+            @CacheEvict(cacheNames = "activeTemplatesByConsultantAndVariety", allEntries = true),
+            @CacheEvict(cacheNames = "consultantActiveSummary", allEntries = true)
+    })
+    public CropVarietyResponse updateCropVariety(Long cropVarietyId, CropVarietyRegistrationRequest request) {
+        Assert.notNull(cropVarietyId, "Crop variety ID cannot be null");
+        Assert.notNull(request, "Crop variety registration request cannot be null");
+        Assert.hasText(request.getName(), "Variety name is required");
+
+        // Get current consultant
+        String consultantMobile = SecurityContextHolder.getContext().getAuthentication().getName();
+        UserProfile currentConsultant = userProfileRepository.findByUser_Mobile(consultantMobile)
+                .orElseThrow(() -> new ResourceNotFoundException("Consultant not found"));
+        logger.info("Consultant {} is updating crop variety with ID: {}", currentConsultant.getUser().getId(), cropVarietyId);
+
+        // Get crop variety
+        CropVariety cropVariety = cropVarietyRepository.findById(cropVarietyId)
+                .orElseThrow(() -> new ResourceNotFoundException("Crop variety not found with ID: " + cropVarietyId));
+        logger.info("Found crop variety: {} (ID: {})", cropVariety.getName(), cropVariety.getId());
+
+        // Verify ownership - only the consultant who created the variety can edit it
+        if (!cropVariety.getConsultant().getId().equals(currentConsultant.getId())) {
+            logger.error("Consultant {} attempted to update crop variety {} owned by consultant {}", 
+                    currentConsultant.getId(), cropVarietyId, cropVariety.getConsultant().getId());
+            throw new ResourceNotFoundException("You do not have permission to edit this crop variety");
+        }
+        logger.info("Ownership verified. Consultant {} owns this crop variety", currentConsultant.getId());
+
+        // Update crop variety fields
+        cropVariety.setName(request.getName());
+        cropVariety.setDescription(request.getDescription());
+        cropVariety.setClimate(request.getClimate());
+        cropVariety.setYieldPotential(request.getYieldPotential());
+        cropVariety.setCycleDurationDays(request.getCycleDurationDays());
+        logger.info("Updating crop variety ID: {} with new details: name={}, climate={}, cycleDurationDays={}", 
+                cropVarietyId, request.getName(), request.getClimate(), request.getCycleDurationDays());
+
+        CropVariety updatedVariety = cropVarietyRepository.save(cropVariety);
+        logger.info("Successfully updated crop variety ID: {} with new name: {}", updatedVariety.getId(), updatedVariety.getName());
+
+        return convertToCropVarietyResponse(updatedVariety);
+    }
+
+    @Override
+    @Caching(evict = {
             @CacheEvict(cacheNames = "farmerCropsByFarmerId", key = "#farmerId"),
             @CacheEvict(cacheNames = "currentFarmerCrops", allEntries = true),
             @CacheEvict(cacheNames = "currentFarmerProfile", allEntries = true),

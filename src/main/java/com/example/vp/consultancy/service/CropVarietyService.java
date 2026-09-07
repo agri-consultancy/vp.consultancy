@@ -28,6 +28,16 @@ public interface CropVarietyService {
     CropVarietyResponse addCropVariety(CropVarietyRegistrationRequest request);
 
     /**
+     * Updates an existing crop variety created by the current consultant.
+     * Only the consultant who created the variety can edit it.
+     * @param cropVarietyId the crop variety ID to update
+     * @param request crop variety registration request with updated details
+     * @return CropVarietyResponse containing updated variety details
+     * @throws ResourceNotFoundException if variety not found or not owned by current consultant
+     */
+    CropVarietyResponse updateCropVariety(Long cropVarietyId, CropVarietyRegistrationRequest request);
+
+    /**
      * Assigns a crop variety to a farmer.
      * @param farmerId the farmer user profile ID
      * @param request crop variety assignment request

@@ -2,6 +2,9 @@ package com.example.vp.consultancy.service.impl;
 
 import com.example.vp.consultancy.dto.AddScheduleGapRequest;
 import com.example.vp.consultancy.dto.AddScheduleGapResponse;
+import com.example.vp.consultancy.dto.AddScheduleTaskRequest;
+import com.example.vp.consultancy.dto.EditScheduleDayResponse;
+import com.example.vp.consultancy.dto.EditScheduleTaskResponse;
 import com.example.vp.consultancy.dto.FarmerScheduleResponse;
 import com.example.vp.consultancy.dto.GetNextSchedulePreviewRequest;
 import com.example.vp.consultancy.dto.GetNextSchedulePreviewResponse;
@@ -11,6 +14,8 @@ import com.example.vp.consultancy.dto.SendScheduleDayRequest;
 import com.example.vp.consultancy.dto.SendScheduleRequest;
 import com.example.vp.consultancy.dto.SendScheduleResponse;
 import com.example.vp.consultancy.dto.SendScheduleTaskRequest;
+import com.example.vp.consultancy.dto.UpdateScheduleDayRequest;
+import com.example.vp.consultancy.dto.UpdateScheduleTaskRequest;
 import com.example.vp.consultancy.entity.FarmerCropVariety;
 import com.example.vp.consultancy.entity.FarmerCropVarietySchedule;
 import com.example.vp.consultancy.entity.FarmerScheduleDay;
@@ -24,7 +29,9 @@ import com.example.vp.consultancy.exception.ResourceNotFoundException;
 import com.example.vp.consultancy.exception.VPException;
 import com.example.vp.consultancy.repository.FarmerCropVarietyRepository;
 import com.example.vp.consultancy.repository.FarmerCropVarietyScheduleRepository;
+import com.example.vp.consultancy.repository.FarmerScheduleDayRepository;
 import com.example.vp.consultancy.repository.FarmerScheduleGapRepository;
+import com.example.vp.consultancy.repository.FarmerScheduleTaskRepository;
 import com.example.vp.consultancy.repository.MasterScheduleDayRepository;
 import com.example.vp.consultancy.repository.MasterScheduleTemplateRepository;
 import com.example.vp.consultancy.repository.UserProfileRepository;
@@ -57,13 +64,11 @@ public class SendScheduleServiceImpl implements SendScheduleService {
     private final MasterScheduleDayRepository masterScheduleDayRepository;
     private final FarmerCropVarietyScheduleRepository farmerCropVarietyScheduleRepository;
     private final FarmerScheduleGapRepository farmerScheduleGapRepository;
+    private final FarmerScheduleDayRepository farmerScheduleDayRepository;
+    private final FarmerScheduleTaskRepository farmerScheduleTaskRepository;
 
     @Override
     @Transactional(readOnly = true)
-    @Cacheable(
-            cacheNames = "schedulePreview",
-            key = "#request.farmerId + ':' + #request.farmerCropVarietyId + ':' + #request.masterScheduleTemplateId + ':' + #request.numberOfDays"
-    )
     public GetNextSchedulePreviewResponse getNextSchedulePreview(GetNextSchedulePreviewRequest request) {
         logger.info("Fetching next schedule preview for Farmer ID: {}, FarmerCropVariety ID: {}, MasterScheduleTemplate ID: {}, Number of Days: {}",
                 request.getFarmerId(), request.getFarmerCropVarietyId(), request.getMasterScheduleTemplateId(), request.getNumberOfDays());
@@ -148,16 +153,16 @@ public class SendScheduleServiceImpl implements SendScheduleService {
 
         long startDay = sortedDays.getFirst().getDayNumber();
         long endDay = sortedDays.getLast().getDayNumber();
-        long endMasterDay = lastSentMasterDay + sortedDays.size();
-        logger.info("Calculated schedule range for sending: farmerStartDay = {}, farmerEndDay = {}, masterEndDay = {}, totalGapDays = {}",
-                startDay, endDay, endMasterDay, totalGapDays);
+        long newLastSentDay = lastSentMasterDay + request.getNumberOfDays();
+        logger.info("Calculated schedule range for sending: farmerStartDay = {}, farmerEndDay = {}, newLastSentDay = {}, totalGapDays = {}",
+                startDay, endDay, newLastSentDay, totalGapDays);
 
         FarmerCropVarietySchedule schedule = FarmerCropVarietySchedule.builder()
                 .farmer(farmer)
                 .farmerCropVariety(farmerCropVariety)
                 .startDate(LocalDate.now())
-                .lastSentDay(endDay)
-                .lastSentMasterDay(endMasterDay)
+                .lastSentDay(newLastSentDay)
+                .lastSentMasterDay(newLastSentDay)
                 .build();
 
         List<FarmerScheduleDay> farmerScheduleDays = sortedDays.stream()
@@ -253,6 +258,8 @@ public class SendScheduleServiceImpl implements SendScheduleService {
                 allScheduleDays.add(convertFarmerDayToScheduleDay(sortedDays.get(index), batchMasterStartDay + index));
             }
         }
+        // Sort the final merged list by day number to ensure proper sequence
+        allScheduleDays.sort(Comparator.comparingLong(ScheduleDayDTO::getDayNumber));
         logger.info("Merged all schedule days into a single flat array. Total days: {}", allScheduleDays.size());
 
         String mobile = farmer.getUser() != null ? farmer.getUser().getMobile() : null;
@@ -414,5 +421,210 @@ public class SendScheduleServiceImpl implements SendScheduleService {
 //            }
 //            expectedDayNumber++;
 //        }
+    }
+
+    @Override
+    @Transactional
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "farmerScheduleByVariety", key = "#farmerId + ':' + #farmerCropVarietyId")
+    })
+    public EditScheduleDayResponse updateScheduleDay(Long farmerId, Long farmerCropVarietyId, Long dayNumber, UpdateScheduleDayRequest request) {
+        logger.info("Updating schedule day for Farmer ID: {}, FarmerCropVariety ID: {}, Day Number: {}",
+                farmerId, farmerCropVarietyId, dayNumber);
+
+        UserProfile farmer = userProfileRepository.findById(farmerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Farmer not found with ID: " + farmerId));
+
+        FarmerCropVariety farmerCropVariety = validateFarmerCropVarietyOwnership(farmer.getId(), farmerCropVarietyId);
+
+        FarmerScheduleDay scheduleDay = farmerScheduleDayRepository
+                .findByFarmerIdAndFarmerCropVarietyIdAndDayNumber(farmerId, farmerCropVarietyId, dayNumber)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Schedule day not found for Farmer ID: " + farmerId + ", FarmerCropVariety ID: " + farmerCropVarietyId + ", Day Number: " + dayNumber));
+
+        scheduleDay.setTitle(request.getDayTitle());
+        if (request.getDayDescription() != null) {
+            scheduleDay.setDescription(request.getDayDescription());
+        }
+        if (request.getStatus() != null) {
+            scheduleDay.setStatus(request.getStatus());
+        }
+        if (request.getDisplayOrder() != null) {
+            scheduleDay.setDisplayOrder(request.getDisplayOrder());
+        }
+
+        FarmerScheduleDay updatedDay = farmerScheduleDayRepository.save(scheduleDay);
+        logger.info("Schedule day updated successfully for Day Number: {} with ID: {}", dayNumber, updatedDay.getId());
+
+        ScheduleDayDTO dayDTO = convertFarmerDayToScheduleDay(updatedDay, dayNumber);
+
+        return EditScheduleDayResponse.builder()
+                .farmerId(farmerId)
+                .farmerCropVarietyId(farmerCropVarietyId)
+                .dayNumber(dayNumber)
+                .message("Schedule day updated successfully")
+                .dayDetails(dayDTO)
+                .build();
+    }
+
+    @Override
+    @Transactional
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "farmerScheduleByVariety", key = "#farmerId + ':' + #farmerCropVarietyId")
+    })
+    public EditScheduleTaskResponse addTaskToScheduleDay(Long farmerId, Long farmerCropVarietyId, Long dayNumber, AddScheduleTaskRequest request) {
+        logger.info("Adding task to schedule day for Farmer ID: {}, FarmerCropVariety ID: {}, Day Number: {}",
+                farmerId, farmerCropVarietyId, dayNumber);
+
+        UserProfile farmer = userProfileRepository.findById(farmerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Farmer not found with ID: " + farmerId));
+
+        FarmerCropVariety farmerCropVariety = validateFarmerCropVarietyOwnership(farmer.getId(), farmerCropVarietyId);
+
+        FarmerScheduleDay scheduleDay = farmerScheduleDayRepository
+                .findByFarmerIdAndFarmerCropVarietyIdAndDayNumber(farmerId, farmerCropVarietyId, dayNumber)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Schedule day not found for Farmer ID: " + farmerId + ", FarmerCropVariety ID: " + farmerCropVarietyId + ", Day Number: " + dayNumber));
+
+        FarmerScheduleTask newTask = FarmerScheduleTask.builder()
+                .scheduleDay(scheduleDay)
+                .taskType(request.getTaskType())
+                .description(request.getTaskDescription())
+                .fertilizerName(StringUtils.hasText(request.getFertilizerName()) ? request.getFertilizerName() : "N/A")
+                .quantity(request.getQuantity())
+                .proportion(request.getProportion())
+                .priority(request.getPriority())
+                .build();
+
+        FarmerScheduleTask savedTask = farmerScheduleTaskRepository.save(newTask);
+        logger.info("Task added successfully to schedule day for Day Number: {} with Task ID: {}", dayNumber, savedTask.getId());
+
+        ScheduleTaskDTO taskDTO = ScheduleTaskDTO.builder()
+                .taskId(savedTask.getId())
+                .priority(savedTask.getPriority())
+                .taskType(savedTask.getTaskType())
+                .taskDescription(savedTask.getDescription())
+                .fertilizerName(savedTask.getFertilizerName())
+                .quantity(savedTask.getQuantity())
+                .proportion(savedTask.getProportion())
+                .build();
+
+        return EditScheduleTaskResponse.builder()
+                .farmerId(farmerId)
+                .farmerCropVarietyId(farmerCropVarietyId)
+                .dayNumber(dayNumber)
+                .taskId(savedTask.getId())
+                .operation("ADD")
+                .message("Task added to schedule day successfully")
+                .taskDetails(taskDTO)
+                .build();
+    }
+
+    @Override
+    @Transactional
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "farmerScheduleByVariety", key = "#farmerId + ':' + #farmerCropVarietyId")
+    })
+    public EditScheduleTaskResponse updateScheduleTask(Long farmerId, Long farmerCropVarietyId, Long dayNumber, Long taskId, UpdateScheduleTaskRequest request) {
+        logger.info("Updating schedule task for Farmer ID: {}, FarmerCropVariety ID: {}, Day Number: {}, Task ID: {}",
+                farmerId, farmerCropVarietyId, dayNumber, taskId);
+
+        UserProfile farmer = userProfileRepository.findById(farmerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Farmer not found with ID: " + farmerId));
+
+        FarmerCropVariety farmerCropVariety = validateFarmerCropVarietyOwnership(farmer.getId(), farmerCropVarietyId);
+
+        FarmerScheduleDay scheduleDay = farmerScheduleDayRepository
+                .findByFarmerIdAndFarmerCropVarietyIdAndDayNumber(farmerId, farmerCropVarietyId, dayNumber)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Schedule day not found for Farmer ID: " + farmerId + ", FarmerCropVariety ID: " + farmerCropVarietyId + ", Day Number: " + dayNumber));
+
+        FarmerScheduleTask task = scheduleDay.getTasks().stream()
+                .filter(t -> t.getId().equals(taskId))
+                .findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Task not found with ID: " + taskId + " in Day Number: " + dayNumber));
+
+        if (request.getTaskType() != null) {
+            task.setTaskType(request.getTaskType());
+        }
+        if (request.getTaskDescription() != null) {
+            task.setDescription(request.getTaskDescription());
+        }
+        if (request.getFertilizerName() != null) {
+            task.setFertilizerName(request.getFertilizerName());
+        }
+        if (request.getQuantity() != null) {
+            task.setQuantity(request.getQuantity());
+        }
+        if (request.getProportion() != null) {
+            task.setProportion(request.getProportion());
+        }
+        if (request.getPriority() != null) {
+            task.setPriority(request.getPriority());
+        }
+
+        FarmerScheduleTask updatedTask = farmerScheduleTaskRepository.save(task);
+        logger.info("Schedule task updated successfully for Task ID: {} in Day Number: {}", taskId, dayNumber);
+
+        ScheduleTaskDTO taskDTO = ScheduleTaskDTO.builder()
+                .taskId(updatedTask.getId())
+                .priority(updatedTask.getPriority())
+                .taskType(updatedTask.getTaskType())
+                .taskDescription(updatedTask.getDescription())
+                .fertilizerName(updatedTask.getFertilizerName())
+                .quantity(updatedTask.getQuantity())
+                .proportion(updatedTask.getProportion())
+                .build();
+
+        return EditScheduleTaskResponse.builder()
+                .farmerId(farmerId)
+                .farmerCropVarietyId(farmerCropVarietyId)
+                .dayNumber(dayNumber)
+                .taskId(updatedTask.getId())
+                .operation("UPDATE")
+                .message("Schedule task updated successfully")
+                .taskDetails(taskDTO)
+                .build();
+    }
+
+    @Override
+    @Transactional
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "farmerScheduleByVariety", key = "#farmerId + ':' + #farmerCropVarietyId")
+    })
+    public EditScheduleTaskResponse deleteScheduleTask(Long farmerId, Long farmerCropVarietyId, Long dayNumber, Long taskId) {
+        logger.info("Deleting schedule task for Farmer ID: {}, FarmerCropVariety ID: {}, Day Number: {}, Task ID: {}",
+                farmerId, farmerCropVarietyId, dayNumber, taskId);
+
+        UserProfile farmer = userProfileRepository.findById(farmerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Farmer not found with ID: " + farmerId));
+
+        FarmerCropVariety farmerCropVariety = validateFarmerCropVarietyOwnership(farmer.getId(), farmerCropVarietyId);
+
+        FarmerScheduleDay scheduleDay = farmerScheduleDayRepository
+                .findByFarmerIdAndFarmerCropVarietyIdAndDayNumber(farmerId, farmerCropVarietyId, dayNumber)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Schedule day not found for Farmer ID: " + farmerId + ", FarmerCropVariety ID: " + farmerCropVarietyId + ", Day Number: " + dayNumber));
+
+        FarmerScheduleTask task = scheduleDay.getTasks().stream()
+                .filter(t -> t.getId().equals(taskId))
+                .findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Task not found with ID: " + taskId + " in Day Number: " + dayNumber));
+
+        scheduleDay.getTasks().remove(task);
+        farmerScheduleTaskRepository.delete(task);
+        farmerScheduleDayRepository.save(scheduleDay);
+        logger.info("Schedule task deleted successfully for Task ID: {} in Day Number: {}", taskId, dayNumber);
+
+        return EditScheduleTaskResponse.builder()
+                .farmerId(farmerId)
+                .farmerCropVarietyId(farmerCropVarietyId)
+                .dayNumber(dayNumber)
+                .taskId(taskId)
+                .operation("DELETE")
+                .message("Schedule task deleted successfully")
+                .build();
     }
 }

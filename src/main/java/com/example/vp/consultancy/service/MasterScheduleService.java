@@ -15,6 +15,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.time.LocalDateTime;
+import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -450,6 +451,7 @@ public class MasterScheduleService {
             .totalPhases(template.getScheduleDays() != null ? template.getScheduleDays().size() : 0)
             .scheduleDays(template.getScheduleDays() != null
                 ? template.getScheduleDays().stream()
+                    .sorted(Comparator.comparingLong(MasterScheduleDay::getDayNumber))
                     .map(this::convertDayDetailedToDTO)
                     .collect(Collectors.toList())
                 : List.of())
