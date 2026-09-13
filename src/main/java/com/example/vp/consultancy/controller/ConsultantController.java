@@ -526,4 +526,117 @@ public class  ConsultantController {
                 HttpStatus.OK.value()
         ));
     }
+
+    /**
+     * Updates a farmer's details (name, email, address, sector).
+     * Mobile number cannot be updated.
+     *
+     * Rate limited to 20 requests per 60 seconds.
+     * Only accessible to users with CONSULTANT role.
+     * Only the farmer's assigned consultant can update their details.
+     *
+     * Business Logic:
+     * 1. Verifies farmer exists and belongs to current consultant
+     * 2. Updates firstName, lastName, email, and sector
+     * 3. Updates or creates address information
+     * 4. Validates email is not duplicated
+     * 5. Returns updated farmer information
+     *
+     * @param farmerId the farmer user profile ID
+     * @param request the update farmer details request
+     * @return ResponseEntity with ApiResponse containing updated farmer information
+     * @throws ResourceNotFoundException if farmer not found
+     * @throws DuplicateResourceException if new email already exists for another user
+     * @throws RateLimitExceededException if rate limit is exceeded
+     */
+    @PutMapping("/farmers/{farmerId}")
+    @RateLimit(limit = 20, windowSize = 60)
+    public ResponseEntity<ApiResponse<UserResponse>> updateFarmerDetails(
+            @PathVariable Long farmerId,
+            @Valid @RequestBody UpdateFarmerDetailsRequest request) {
+        logger.info("Updating farmer details for farmer ID: {} with firstName: {}, lastName: {}, email: {}", farmerId, request.getFirstName(), request.getLastName(), request.getEmail());
+        
+        // Verify farmer belongs to current consultant
+        UserProfile farmer = userProfileRepository.findById(farmerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Farmer not found with ID: " + farmerId));
+        
+        String consultantMobile = SecurityContextHolder.getContext()
+            .getAuthentication()
+            .getName();
+        
+        User consultant = userRepository.findByMobile(consultantMobile)
+            .orElseThrow(() -> new RuntimeException("Consultant not found"));
+        
+        if (farmer.getConsultant() == null || !farmer.getConsultant().getId().equals(consultant.getId())) {
+            logger.error("Farmer ID: {} does not belong to consultant with mobile: {}", farmerId, consultantMobile);
+            throw new AccessDeniedException("Farmer does not belong to your organization");
+        }
+
+        UserResponse response = userService.updateFarmerDetails(farmerId, request);
+        logger.info("Farmer details updated successfully for farmer ID: {}", farmerId);
+        
+        return ResponseEntity.ok(new ApiResponse<>(
+            true,
+            "Farmer details updated successfully",
+            response,
+            HttpStatus.OK.value()
+        ));
+    }
+
+    /**
+     * Unassigns a crop variety from a farmer and deletes all associated schedules.
+     *
+     * Rate limited to 20 requests per 60 seconds.
+     * Only accessible to users with CONSULTANT role.
+     * Only the farmer's assigned consultant can unassign varieties.
+     *
+     * Business Logic:
+     * 1. Verifies farmer exists and belongs to current consultant
+     * 2. Verifies the crop variety assignment exists for this farmer
+     * 3. Deletes all FarmerCropVarietySchedule records
+     * 4. Deletes all FarmerScheduleDay records (cascaded)
+     * 5. Deletes all FarmerScheduleTask records (cascaded)
+     * 6. Deletes all FarmerScheduleGap records
+     * 7. Deletes the FarmerCropVariety assignment record
+     *
+     * @param farmerId the farmer user profile ID
+     * @param farmerCropVarietyId the farmer crop variety assignment ID to unassign
+     * @return ResponseEntity with ApiResponse indicating successful unassignment
+     * @throws ResourceNotFoundException if farmer not found or assignment not found
+     * @throws AccessDeniedException if farmer doesn't belong to current consultant
+     * @throws RateLimitExceededException if rate limit is exceeded
+     */
+    @DeleteMapping("/farmers/{farmerId}/crops/{farmerCropVarietyId}")
+    @RateLimit(limit = 20, windowSize = 60)
+    public ResponseEntity<ApiResponse<Void>> unassignCropVarietyFromFarmer(
+            @PathVariable Long farmerId,
+            @PathVariable Long farmerCropVarietyId) {
+        logger.info("Unassigning crop variety ID: {} from farmer ID: {}", farmerCropVarietyId, farmerId);
+        
+        // Verify farmer belongs to current consultant
+        UserProfile farmer = userProfileRepository.findById(farmerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Farmer not found with ID: " + farmerId));
+        
+        String consultantMobile = SecurityContextHolder.getContext()
+            .getAuthentication()
+            .getName();
+        
+        User consultant = userRepository.findByMobile(consultantMobile)
+            .orElseThrow(() -> new RuntimeException("Consultant not found"));
+        
+        if (farmer.getConsultant() == null || !farmer.getConsultant().getId().equals(consultant.getId())) {
+            logger.error("Farmer ID: {} does not belong to consultant with mobile: {}", farmerId, consultantMobile);
+            throw new AccessDeniedException("Farmer does not belong to your organization");
+        }
+
+        cropVarietyService.unassignCropVarietyFromFarmer(farmerId, farmerCropVarietyId);
+        logger.info("Crop variety unassigned successfully for farmer ID: {} and variety ID: {}", farmerId, farmerCropVarietyId);
+        
+        return ResponseEntity.ok(new ApiResponse<>(
+            true,
+            "Crop variety unassigned and all schedules deleted successfully",
+            null,
+            HttpStatus.OK.value()
+        ));
+    }
 }

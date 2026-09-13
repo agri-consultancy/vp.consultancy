@@ -89,5 +89,24 @@ public interface CropVarietyService {
     ConsultantActiveSummaryResponse getConsultantActiveSummary();
 
     FarmerProfileResponse getCurrentFarmerProfile();
-}
 
+    /**
+     * Unassigns a crop variety from a farmer.
+     * Deletes all associated schedules and schedule days/tasks/gaps.
+     *
+     * Business Logic:
+     * 1. Verify farmer exists
+     * 2. Verify FarmerCropVariety assignment exists
+     * 3. Delete all FarmerCropVarietySchedule records for this assignment
+     * 4. Delete all FarmerScheduleDay records for this assignment
+     * 5. Delete all FarmerScheduleTask records for this assignment
+     * 6. Delete all FarmerScheduleGap records for this assignment
+     * 7. Delete the FarmerCropVariety record itself
+     * 8. Clear relevant caches
+     *
+     * @param farmerId the farmer user profile ID
+     * @param farmerCropVarietyId the farmer crop variety assignment ID to unassign
+     * @throws ResourceNotFoundException if farmer not found or assignment not found
+     */
+    void unassignCropVarietyFromFarmer(Long farmerId, Long farmerCropVarietyId);
+}

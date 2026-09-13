@@ -40,6 +40,8 @@ public class FarmerCropVarietyResponse {
 
     private Long lastScheduleSentDay;
 
+    private Long gapDays;
+
     private String expectedHarvestDate;
 
     private String status;

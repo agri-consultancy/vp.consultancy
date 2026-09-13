@@ -2,6 +2,7 @@ package com.example.vp.consultancy.service;
 
 import com.example.vp.consultancy.dto.ConsultantRegistrationRequest;
 import com.example.vp.consultancy.dto.FarmerRegistrationRequest;
+import com.example.vp.consultancy.dto.UpdateFarmerDetailsRequest;
 import com.example.vp.consultancy.dto.UserResponse;
 import com.example.vp.consultancy.entity.User;
 import com.example.vp.consultancy.exception.DuplicateResourceException;
@@ -18,7 +19,8 @@ import java.util.List;
  * - Farmer registration (consultant only)
  * - User profile retrieval
  * - Farmer list management
- * 
+ * - Farmer details update
+ *
  * Implementations must ensure:
  * - Duplicate mobile/email validation
  * - Password encryption using BCrypt
@@ -112,4 +114,24 @@ public interface UserService extends UserDetailsService {
      * Returns the full details of the currently authenticated user based on the access token.
      */
     com.example.vp.consultancy.dto.UserDetailsResponse getCurrentUserDetails();
+
+    /**
+     * Updates farmer details (name, email, address, sector).
+     * Mobile number cannot be updated.
+     *
+     * Business Logic:
+     * 1. Verify farmer exists
+     * 2. Check if email is being changed and validate it's not duplicate
+     * 3. Update UserProfile with firstName, lastName, email, sector
+     * 4. Update or create Address with address details
+     * 5. Save all changes to database
+     * 6. Return updated farmer information
+     *
+     * @param farmerId the farmer user profile ID
+     * @param request the update farmer details request
+     * @return UserResponse containing updated farmer information
+     * @throws ResourceNotFoundException if farmer not found
+     * @throws DuplicateResourceException if new email already exists for another user
+     */
+    UserResponse updateFarmerDetails(Long farmerId, UpdateFarmerDetailsRequest request);
 }

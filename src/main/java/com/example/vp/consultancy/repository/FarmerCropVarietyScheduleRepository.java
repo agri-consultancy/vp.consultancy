@@ -18,4 +18,12 @@ public interface FarmerCropVarietyScheduleRepository extends JpaRepository<Farme
 
     @Query("SELECT MAX(s.lastSentDay) FROM FarmerCropVarietySchedule s WHERE s.farmerCropVariety.id = :id")
     Long getLastSentDayByFarmerCropVarietyId(Long id);
+
+    /**
+     * Find all schedules for a specific farmer crop variety.
+     * Used for deletion when unassigning a variety.
+     * @param farmerCropVarietyId the farmer crop variety ID
+     * @return List of all schedules for this farmer crop variety
+     */
+    List<FarmerCropVarietySchedule> findAllByFarmerCropVarietyId(Long farmerCropVarietyId);
 }

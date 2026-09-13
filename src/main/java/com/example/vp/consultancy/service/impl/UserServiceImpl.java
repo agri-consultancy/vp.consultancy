@@ -2,6 +2,7 @@ package com.example.vp.consultancy.service.impl;
 
 import com.example.vp.consultancy.dto.ConsultantRegistrationRequest;
 import com.example.vp.consultancy.dto.FarmerRegistrationRequest;
+import com.example.vp.consultancy.dto.UpdateFarmerDetailsRequest;
 import com.example.vp.consultancy.dto.UserResponse;
 import com.example.vp.consultancy.entity.Address;
 import com.example.vp.consultancy.entity.User;
@@ -321,6 +322,87 @@ public class UserServiceImpl implements UserService {
     @Override
     public void createUser(User admin) {
         userRepository.save(admin);
+    }
+
+    @Override
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "farmersPortfolio", allEntries = true),
+            @CacheEvict(cacheNames = "farmerProfileDetail", key = "#farmerId"),
+            @CacheEvict(cacheNames = "farmerCropsByFarmerId", key = "#farmerId"),
+            @CacheEvict(cacheNames = "consultantActiveSummary", allEntries = true)
+    })
+    public UserResponse updateFarmerDetails(Long farmerId, UpdateFarmerDetailsRequest request) {
+        Assert.notNull(farmerId, "Farmer ID cannot be null");
+        Assert.notNull(request, "Update farmer details request cannot be null");
+        Assert.hasText(request.getFirstName(), "First name is required");
+        Assert.hasText(request.getLastName(), "Last name is required");
+        logger.info("Updating farmer details for farmer ID: {}", farmerId);
+
+        // Get farmer profile
+        UserProfile farmer = userProfileRepository.findById(farmerId)
+            .orElseThrow(() -> new ResourceNotFoundException("Farmer not found with ID: " + farmerId));
+        logger.info("Found farmer profile: {} (ID: {})", farmer.getFirstName() + " " + farmer.getLastName(), farmerId);
+
+        // Check if email is being changed and validate it's not duplicate
+        if (request.getEmail() != null && !request.getEmail().isEmpty()) {
+            if (!farmer.getEmail().equals(request.getEmail())) {
+                // Email is being changed, check for duplicates
+                if (userProfileRepository.findByEmail(request.getEmail()).isPresent()) {
+                    logger.error("Email {} already registered for another user", request.getEmail());
+                    throw new DuplicateResourceException("Email already registered");
+                }
+                logger.info("Email will be updated from {} to {}", farmer.getEmail(), request.getEmail());
+                farmer.setEmail(request.getEmail());
+            }
+        }
+
+        // Update basic profile information
+        farmer.setFirstName(request.getFirstName());
+        farmer.setLastName(request.getLastName());
+        if (request.getSector() != null && !request.getSector().isEmpty()) {
+            farmer.setSector(request.getSector());
+        }
+        logger.info("Updated farmer name and sector for farmer ID: {}", farmerId);
+
+        // Update or create Address
+        if (request.getAddressLine() != null || request.getCity() != null ||
+            request.getState() != null || request.getPostalCode() != null) {
+
+            Address address;
+            if (farmer.getAddress() != null) {
+                address = farmer.getAddress();
+                logger.info("Updating existing address for farmer ID: {}", farmerId);
+            } else {
+                address = new Address();
+                logger.info("Creating new address for farmer ID: {}", farmerId);
+            }
+
+            if (request.getAddressLine() != null && !request.getAddressLine().isEmpty()) {
+                address.setAddressLine(request.getAddressLine());
+            }
+            if (request.getCity() != null && !request.getCity().isEmpty()) {
+                address.setCity(request.getCity());
+            }
+            if (request.getDistrict() != null && !request.getDistrict().isEmpty()) {
+                address.setDistrict(request.getDistrict());
+            }
+            if (request.getState() != null && !request.getState().isEmpty()) {
+                address.setState(request.getState());
+            }
+            if (request.getPostalCode() != null && !request.getPostalCode().isEmpty()) {
+                address.setPostalCode(request.getPostalCode());
+            }
+
+            Address savedAddress = addressRepository.save(address);
+            farmer.setAddress(savedAddress);
+            logger.info("Saved address for farmer ID: {}", farmerId);
+        }
+
+        // Save updated farmer profile
+        UserProfile updatedFarmer = userProfileRepository.save(farmer);
+        logger.info("Successfully updated farmer details for farmer ID: {}", farmerId);
+
+        return convertToUserResponse(updatedFarmer);
     }
 
     @Override

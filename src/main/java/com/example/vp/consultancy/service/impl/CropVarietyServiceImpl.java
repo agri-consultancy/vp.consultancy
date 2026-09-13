@@ -13,6 +13,8 @@ import com.example.vp.consultancy.dto.FarmerProfileResponse;
 import com.example.vp.consultancy.entity.Crop;
 import com.example.vp.consultancy.entity.CropVariety;
 import com.example.vp.consultancy.entity.FarmerCropVariety;
+import com.example.vp.consultancy.entity.FarmerCropVarietySchedule;
+import com.example.vp.consultancy.entity.FarmerScheduleGap;
 import com.example.vp.consultancy.entity.UserProfile;
 import com.example.vp.consultancy.entity.UserRole;
 import com.example.vp.consultancy.exception.ResourceNotFoundException;
@@ -49,16 +51,18 @@ public class CropVarietyServiceImpl implements CropVarietyService {
     private final FarmerCropVarietyScheduleRepository farmerCropVarietyScheduleRepository;
     private final CropRepository cropRepository;
     private final UserProfileRepository userProfileRepository;
+    private final FarmerScheduleGapRepository farmerScheduleGapRepository;
 
     public CropVarietyServiceImpl(CropVarietyRepository cropVarietyRepository,
                                   FarmerCropVarietyRepository farmerCropVarietyRepository, FarmerCropVarietyScheduleRepository farmerCropVarietyScheduleRepository,
                                   CropRepository cropRepository,
-                                  UserProfileRepository userProfileRepository) {
+                                  UserProfileRepository userProfileRepository, FarmerScheduleGapRepository farmerScheduleGapRepository) {
         this.cropVarietyRepository = cropVarietyRepository;
         this.farmerCropVarietyRepository = farmerCropVarietyRepository;
         this.farmerCropVarietyScheduleRepository = farmerCropVarietyScheduleRepository;
         this.cropRepository = cropRepository;
         this.userProfileRepository = userProfileRepository;
+        this.farmerScheduleGapRepository = farmerScheduleGapRepository;
     }
 
     @Override
@@ -332,6 +336,58 @@ public class CropVarietyServiceImpl implements CropVarietyService {
     }
 
     @Override
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "farmerCropsByFarmerId", key = "#farmerId"),
+            @CacheEvict(cacheNames = "currentFarmerCrops", allEntries = true),
+            @CacheEvict(cacheNames = "currentFarmerProfile", allEntries = true),
+            @CacheEvict(cacheNames = "farmersPortfolio", allEntries = true),
+            @CacheEvict(cacheNames = "farmerProfileDetail", key = "#farmerId"),
+            @CacheEvict(cacheNames = "consultantActiveSummary", allEntries = true),
+            @CacheEvict(cacheNames = "farmerScheduleByVariety", allEntries = true)
+    })
+    public void unassignCropVarietyFromFarmer(Long farmerId, Long farmerCropVarietyId) {
+        Assert.notNull(farmerId, "Farmer ID is required");
+        Assert.notNull(farmerCropVarietyId, "Farmer crop variety ID is required");
+
+        logger.info("Starting unassignment of crop variety ID: {} from farmer ID: {}", farmerCropVarietyId, farmerId);
+
+        // Verify farmer exists
+        UserProfile farmer = userProfileRepository.findById(farmerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Farmer not found with ID: " + farmerId));
+        logger.info("Found farmer: {} (ID: {})", farmer.getFirstName() + " " + farmer.getLastName(), farmerId);
+
+        // Verify FarmerCropVariety assignment exists and belongs to this farmer
+        FarmerCropVariety farmerCropVariety = farmerCropVarietyRepository.findById(farmerCropVarietyId)
+                .orElseThrow(() -> new ResourceNotFoundException("Farmer crop variety assignment not found with ID: " + farmerCropVarietyId));
+        logger.info("Found farmer crop variety assignment: {} (ID: {})", farmerCropVariety.getCropVariety().getName(), farmerCropVarietyId);
+
+        if (!farmerCropVariety.getFarmer().getId().equals(farmerId)) {
+            logger.error("Farmer crop variety assignment ID: {} does not belong to farmer ID: {}", farmerCropVarietyId, farmerId);
+            throw new ResourceNotFoundException("Farmer crop variety assignment does not belong to this farmer");
+        }
+
+        // Delete all FarmerCropVarietySchedule records (this will cascade delete FarmerScheduleDay and FarmerScheduleTask)
+        List<FarmerCropVarietySchedule> schedules = farmerCropVarietyScheduleRepository.findAllByFarmerCropVarietyId(farmerCropVarietyId);
+        logger.info("Found {} schedules to delete for farmer crop variety ID: {}", schedules.size(), farmerCropVarietyId);
+        if (!schedules.isEmpty()) {
+            farmerCropVarietyScheduleRepository.deleteAllInBatch(schedules);
+            logger.info("Deleted {} schedules for farmer crop variety ID: {}", schedules.size(), farmerCropVarietyId);
+        }
+
+        // Delete all FarmerScheduleGap records
+        List<FarmerScheduleGap> gaps = farmerScheduleGapRepository.findByFarmerCropVarietyId(farmerCropVarietyId);
+        logger.info("Found {} gaps to delete for farmer crop variety ID: {}", gaps.size(), farmerCropVarietyId);
+        if (!gaps.isEmpty()) {
+            farmerScheduleGapRepository.deleteAllInBatch(gaps);
+            logger.info("Deleted {} gaps for farmer crop variety ID: {}", gaps.size(), farmerCropVarietyId);
+        }
+
+        // Delete the FarmerCropVariety record itself
+        farmerCropVarietyRepository.delete(farmerCropVariety);
+        logger.info("Successfully deleted farmer crop variety assignment ID: {} for farmer ID: {}", farmerCropVarietyId, farmerId);
+    }
+
+    @Override
     @Transactional(readOnly = true)
     @Cacheable(
             cacheNames = "consultantCropsWithVarieties",
@@ -539,6 +595,7 @@ public class CropVarietyServiceImpl implements CropVarietyService {
         String yieldPotential = "N/A";
         Long cycleDurationDays = 0L;
         Long lastSentDay = 0L;
+        Long gapDays = 0L;
         logger.info("Converting FarmerCropVariety entity to FarmerCropVarietyResponse DTO for assignment ID: {}", farmerCropVariety.getId());
 
         if (farmerCropVariety.getCropVariety() != null) {
@@ -547,6 +604,7 @@ public class CropVarietyServiceImpl implements CropVarietyService {
             cycleDurationDays = farmerCropVariety.getCropVariety().getCycleDurationDays();
             logger.info("Fetched crop variety info for assignment ID: {} - Crop Variety Name: {}, Yield Potential: {}, Cycle Duration Days: {}", farmerCropVariety.getId(), cropVarietyName, yieldPotential, cycleDurationDays);
             lastSentDay = farmerCropVarietyScheduleRepository.getLastSentDayByFarmerCropVarietyId(farmerCropVariety.getId());
+            gapDays = farmerScheduleGapRepository.getTotalGapDaysForVariety(farmerCropVariety.getId());
             if (farmerCropVariety.getCropVariety().getCrop() != null) {
                 cropName = farmerCropVariety.getCropVariety().getCrop().getName();
                 logger.info("Fetched crop name for assignment ID: {} - Crop Name: {}", farmerCropVariety.getId(), cropName);
@@ -588,7 +646,7 @@ public class CropVarietyServiceImpl implements CropVarietyService {
                 .totalLand(farmerCropVariety.getTotalLand())
                 .totalPlants(farmerCropVariety.getTotalPlants())
                 .sowingDate(farmerCropVariety.getSowingDate() != null ? farmerCropVariety.getSowingDate().toString() : null)
-                .lastScheduleSentDay(lastSentDay != null ? lastSentDay : 0)
+                .lastScheduleSentDay(lastSentDay != null ? lastSentDay + gapDays : 0 + gapDays)
                 .expectedHarvestDate(farmerCropVariety.getExpectedHarvestDate() != null ? farmerCropVariety.getExpectedHarvestDate().toString() : null)
                 .status(farmerCropVariety.getStatus())
                 .progressPercentage(progressPercentage)
