@@ -109,4 +109,42 @@ public interface CropVarietyService {
      * @throws ResourceNotFoundException if farmer not found or assignment not found
      */
     void unassignCropVarietyFromFarmer(Long farmerId, Long farmerCropVarietyId);
+
+    /**
+     * Deletes a farmer profile and all associated data.
+     *
+     * Business Logic:
+     * 1. Verify consultant owns this farmer
+     * 2. Delete all FarmerCropVarietySchedule records
+     * 3. Delete all FarmerScheduleDay records (cascaded)
+     * 4. Delete all FarmerScheduleTask records (cascaded)
+     * 5. Delete all FarmerScheduleGap records
+     * 6. Delete all FarmerCropVariety assignments
+     * 7. Delete the UserProfile
+     * 8. Delete the User entity
+     * 9. Delete the Address if associated
+     * 10. Clear relevant caches
+     *
+     * @param farmerId the farmer user profile ID
+     * @throws ResourceNotFoundException if farmer not found
+     * @throws AccessDeniedException if farmer doesn't belong to current consultant
+     */
+    void deleteFarmerProfile(Long farmerId);
+
+    /**
+     * Deletes a crop variety created by the consultant.
+     *
+     * Business Logic:
+     * 1. Verify consultant owns this crop variety
+     * 2. Check if crop variety is assigned to any farmers
+     * 3. If assigned, return error response
+     * 4. Delete all MasterScheduleTemplate records for this crop variety
+     * 5. Delete the CropVariety record itself
+     * 6. Clear relevant caches
+     *
+     * @param cropVarietyId the crop variety ID
+     * @throws ResourceNotFoundException if crop variety not found
+     * @throws AccessDeniedException if crop variety doesn't belong to current consultant
+     */
+    void deleteCropVariety(Long cropVarietyId);
 }

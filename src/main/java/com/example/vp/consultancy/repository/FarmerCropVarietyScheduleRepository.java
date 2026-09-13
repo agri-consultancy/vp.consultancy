@@ -26,4 +26,12 @@ public interface FarmerCropVarietyScheduleRepository extends JpaRepository<Farme
      * @return List of all schedules for this farmer crop variety
      */
     List<FarmerCropVarietySchedule> findAllByFarmerCropVarietyId(Long farmerCropVarietyId);
+
+    /**
+     * Find all schedules for a specific farmer.
+     * Used for deletion when deleting farmer profile.
+     * @param farmerId the farmer user profile ID
+     * @return List of all schedules for this farmer
+     */
+    List<FarmerCropVarietySchedule> findByFarmerId(Long farmerId);
 }

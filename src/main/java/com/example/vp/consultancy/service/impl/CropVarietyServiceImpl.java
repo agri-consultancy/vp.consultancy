@@ -15,6 +15,8 @@ import com.example.vp.consultancy.entity.CropVariety;
 import com.example.vp.consultancy.entity.FarmerCropVariety;
 import com.example.vp.consultancy.entity.FarmerCropVarietySchedule;
 import com.example.vp.consultancy.entity.FarmerScheduleGap;
+import com.example.vp.consultancy.entity.MasterScheduleTemplate;
+import com.example.vp.consultancy.entity.User;
 import com.example.vp.consultancy.entity.UserProfile;
 import com.example.vp.consultancy.entity.UserRole;
 import com.example.vp.consultancy.exception.ResourceNotFoundException;
@@ -52,17 +54,25 @@ public class CropVarietyServiceImpl implements CropVarietyService {
     private final CropRepository cropRepository;
     private final UserProfileRepository userProfileRepository;
     private final FarmerScheduleGapRepository farmerScheduleGapRepository;
+    private final UserRepository userRepository;
+    private final AddressRepository addressRepository;
+    private final MasterScheduleTemplateRepository masterScheduleTemplateRepository;
 
     public CropVarietyServiceImpl(CropVarietyRepository cropVarietyRepository,
                                   FarmerCropVarietyRepository farmerCropVarietyRepository, FarmerCropVarietyScheduleRepository farmerCropVarietyScheduleRepository,
                                   CropRepository cropRepository,
-                                  UserProfileRepository userProfileRepository, FarmerScheduleGapRepository farmerScheduleGapRepository) {
+                                  UserProfileRepository userProfileRepository, FarmerScheduleGapRepository farmerScheduleGapRepository,
+                                  UserRepository userRepository, AddressRepository addressRepository,
+                                  MasterScheduleTemplateRepository masterScheduleTemplateRepository) {
         this.cropVarietyRepository = cropVarietyRepository;
         this.farmerCropVarietyRepository = farmerCropVarietyRepository;
         this.farmerCropVarietyScheduleRepository = farmerCropVarietyScheduleRepository;
         this.cropRepository = cropRepository;
         this.userProfileRepository = userProfileRepository;
         this.farmerScheduleGapRepository = farmerScheduleGapRepository;
+        this.userRepository = userRepository;
+        this.addressRepository = addressRepository;
+        this.masterScheduleTemplateRepository = masterScheduleTemplateRepository;
     }
 
     @Override
@@ -370,7 +380,10 @@ public class CropVarietyServiceImpl implements CropVarietyService {
         List<FarmerCropVarietySchedule> schedules = farmerCropVarietyScheduleRepository.findAllByFarmerCropVarietyId(farmerCropVarietyId);
         logger.info("Found {} schedules to delete for farmer crop variety ID: {}", schedules.size(), farmerCropVarietyId);
         if (!schedules.isEmpty()) {
-            farmerCropVarietyScheduleRepository.deleteAllInBatch(schedules);
+            // Use individual deletes to ensure JPA cascade (or orphanRemoval) is applied and child entities are removed.
+            for (FarmerCropVarietySchedule s : schedules) {
+                farmerCropVarietyScheduleRepository.delete(s);
+            }
             logger.info("Deleted {} schedules for farmer crop variety ID: {}", schedules.size(), farmerCropVarietyId);
         }
 
@@ -378,7 +391,8 @@ public class CropVarietyServiceImpl implements CropVarietyService {
         List<FarmerScheduleGap> gaps = farmerScheduleGapRepository.findByFarmerCropVarietyId(farmerCropVarietyId);
         logger.info("Found {} gaps to delete for farmer crop variety ID: {}", gaps.size(), farmerCropVarietyId);
         if (!gaps.isEmpty()) {
-            farmerScheduleGapRepository.deleteAllInBatch(gaps);
+            // gaps have no deep child relationships; deleteAll is safe and will iterate deletes
+            farmerScheduleGapRepository.deleteAll(gaps);
             logger.info("Deleted {} gaps for farmer crop variety ID: {}", gaps.size(), farmerCropVarietyId);
         }
 
@@ -684,6 +698,145 @@ public class CropVarietyServiceImpl implements CropVarietyService {
                 .createdAt(farmer.getCreatedAt() != null ? farmer.getCreatedAt().toString() : null)
                 .updatedAt(farmer.getUpdatedAt() != null ? farmer.getUpdatedAt().toString() : null)
                 .build();
+    }
+
+    @Override
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "farmerCropsByFarmerId", key = "#farmerId"),
+            @CacheEvict(cacheNames = "currentFarmerCrops", allEntries = true),
+            @CacheEvict(cacheNames = "currentFarmerProfile", allEntries = true),
+            @CacheEvict(cacheNames = "farmersPortfolio", allEntries = true),
+            @CacheEvict(cacheNames = "farmerProfileDetail", key = "#farmerId"),
+            @CacheEvict(cacheNames = "consultantActiveSummary", allEntries = true),
+            @CacheEvict(cacheNames = "farmerScheduleByVariety", allEntries = true)
+    })
+    public void deleteFarmerProfile(Long farmerId) {
+        Assert.notNull(farmerId, "Farmer ID is required");
+
+        logger.info("Starting deletion of farmer profile with ID: {}", farmerId);
+
+        // Verify farmer exists
+        UserProfile farmer = userProfileRepository.findById(farmerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Farmer not found with ID: " + farmerId));
+        logger.info("Found farmer: {} (ID: {})", farmer.getFirstName() + " " + farmer.getLastName(), farmerId);
+
+        // Verify consultant owns this farmer
+        String consultantMobile = SecurityContextHolder.getContext().getAuthentication().getName();
+        User consultant = userRepository.findByMobile(consultantMobile)
+                .orElseThrow(() -> new ResourceNotFoundException("Consultant not found"));
+        logger.info("Consultant with mobile {} is attempting to delete farmer ID: {}", consultantMobile, farmerId);
+
+        if (farmer.getConsultant() == null || !farmer.getConsultant().getId().equals(consultant.getId())) {
+            logger.error("Farmer ID: {} does not belong to consultant with ID: {}", farmerId, consultant.getId());
+            throw new ResourceNotFoundException("Farmer does not belong to your organization");
+        }
+        logger.info("Ownership verified. Consultant {} owns farmer ID: {}", consultant.getId(), farmerId);
+
+        // Delete all FarmerCropVarietySchedule records
+        List<FarmerCropVarietySchedule> schedules = farmerCropVarietyScheduleRepository.findByFarmerId(farmerId);
+        logger.info("Found {} schedules to delete for farmer ID: {}", schedules.size(), farmerId);
+        if (!schedules.isEmpty()) {
+            // Avoid bulk/batch delete which bypasses JPA cascade; delete entities individually so child days/tasks are removed.
+            for (FarmerCropVarietySchedule s : schedules) {
+                farmerCropVarietyScheduleRepository.delete(s);
+            }
+            logger.info("Deleted {} schedules for farmer ID: {}", schedules.size(), farmerId);
+        }
+
+        // Delete all FarmerScheduleGap records
+        List<FarmerScheduleGap> gaps = farmerScheduleGapRepository.findByFarmerId(farmerId);
+        logger.info("Found {} gaps to delete for farmer ID: {}", gaps.size(), farmerId);
+        if (!gaps.isEmpty()) {
+            farmerScheduleGapRepository.deleteAll(gaps);
+            logger.info("Deleted {} gaps for farmer ID: {}", gaps.size(), farmerId);
+        }
+
+        // Delete all FarmerCropVariety assignments
+        List<FarmerCropVariety> farmerCrops = farmerCropVarietyRepository.findByFarmerId(farmerId);
+        logger.info("Found {} farmer crop variety assignments to delete for farmer ID: {}", farmerCrops.size(), farmerId);
+        if (!farmerCrops.isEmpty()) {
+            // delete each assignment to ensure any cascade/remove hooks are executed
+            for (FarmerCropVariety fc : farmerCrops) {
+                farmerCropVarietyRepository.delete(fc);
+            }
+            logger.info("Deleted {} farmer crop variety assignments for farmer ID: {}", farmerCrops.size(), farmerId);
+        }
+
+        // Get address ID before deleting UserProfile
+        Long addressId = null;
+        if (farmer.getAddress() != null) {
+            addressId = farmer.getAddress().getId();
+        }
+
+        // Delete UserProfile
+        userProfileRepository.delete(farmer);
+        logger.info("Deleted UserProfile for farmer ID: {}", farmerId);
+
+        // Delete User entity
+        User farmerUser = farmer.getUser();
+        if (farmerUser != null) {
+            userRepository.delete(farmerUser);
+            logger.info("Deleted User entity for farmer ID: {} with user ID: {}", farmerId, farmerUser.getId());
+        }
+
+        // Delete Address if it exists
+        if (addressId != null) {
+            addressRepository.deleteById(addressId);
+            logger.info("Deleted Address with ID: {} for farmer ID: {}", addressId, farmerId);
+        }
+
+        logger.info("Successfully deleted farmer profile ID: {} and all associated data", farmerId);
+    }
+
+    @Override
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "consultantCropsWithVarieties", allEntries = true),
+            @CacheEvict(cacheNames = "activeTemplatesByConsultantAndVariety", allEntries = true),
+            @CacheEvict(cacheNames = "consultantActiveSummary", allEntries = true)
+    })
+    public void deleteCropVariety(Long cropVarietyId) {
+        Assert.notNull(cropVarietyId, "Crop variety ID is required");
+
+        logger.info("Starting deletion of crop variety with ID: {}", cropVarietyId);
+
+        // Get current consultant
+        String consultantMobile = SecurityContextHolder.getContext().getAuthentication().getName();
+        UserProfile currentConsultant = userProfileRepository.findByUser_Mobile(consultantMobile)
+                .orElseThrow(() -> new ResourceNotFoundException("Consultant not found"));
+        logger.info("Consultant {} is attempting to delete crop variety with ID: {}", currentConsultant.getId(), cropVarietyId);
+
+        // Get crop variety
+        CropVariety cropVariety = cropVarietyRepository.findById(cropVarietyId)
+                .orElseThrow(() -> new ResourceNotFoundException("Crop variety not found with ID: " + cropVarietyId));
+        logger.info("Found crop variety: {} (ID: {})", cropVariety.getName(), cropVarietyId);
+
+        // Verify ownership - only the consultant who created the variety can delete it
+        if (!cropVariety.getConsultant().getId().equals(currentConsultant.getId())) {
+            logger.error("Consultant {} attempted to delete crop variety {} owned by consultant {}",
+                    currentConsultant.getId(), cropVarietyId, cropVariety.getConsultant().getId());
+            throw new ResourceNotFoundException("You do not have permission to delete this crop variety");
+        }
+        logger.info("Ownership verified. Consultant {} owns this crop variety", currentConsultant.getId());
+
+        // Check if crop variety is assigned to any farmers
+        boolean isAssignedToFarmers = cropVarietyRepository.existsByIdWithFarmerAssignments(cropVarietyId);
+        if (isAssignedToFarmers) {
+            logger.warn("Crop variety ID: {} is assigned to one or more farmers. Deletion not allowed.", cropVarietyId);
+            throw new ResourceNotFoundException("This crop variety is already assigned to farmers. You cannot delete it until all farmer assignments are removed.");
+        }
+        logger.info("Verified that crop variety ID: {} is not assigned to any farmers", cropVarietyId);
+
+        // Delete all MasterScheduleTemplate records for this crop variety
+        List<MasterScheduleTemplate> masterSchedules = masterScheduleTemplateRepository.findByCropVarietyId(cropVarietyId);
+        logger.info("Found {} master schedule templates to delete for crop variety ID: {}", masterSchedules.size(), cropVarietyId);
+        if (!masterSchedules.isEmpty()) {
+            masterScheduleTemplateRepository.deleteAllInBatch(masterSchedules);
+            logger.info("Deleted {} master schedule templates for crop variety ID: {}", masterSchedules.size(), cropVarietyId);
+        }
+
+        // Delete the CropVariety record itself
+        cropVarietyRepository.delete(cropVariety);
+        logger.info("Successfully deleted crop variety ID: {} with name: {}", cropVarietyId, cropVariety.getName());
     }
 }
 

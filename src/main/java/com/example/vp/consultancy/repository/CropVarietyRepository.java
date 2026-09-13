@@ -2,6 +2,7 @@ package com.example.vp.consultancy.repository;
 
 import com.example.vp.consultancy.entity.CropVariety;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -43,5 +44,13 @@ public interface CropVarietyRepository extends JpaRepository<CropVariety, Long> 
      * @return Optional containing crop variety if found
      */
     Optional<CropVariety> findById(Long id);
+
+    /**
+     * Check if a crop variety has any farmer assignments
+     * @param cropVarietyId the crop variety ID
+     * @return true if variety is assigned to at least one farmer, false otherwise
+     */
+    @Query("SELECT CASE WHEN COUNT(fcv) > 0 THEN true ELSE false END FROM FarmerCropVariety fcv WHERE fcv.cropVariety.id = :cropVarietyId")
+    boolean existsByIdWithFarmerAssignments(@org.springframework.data.repository.query.Param("cropVarietyId") Long cropVarietyId);
 }
 

@@ -24,5 +24,13 @@ public interface FarmerScheduleGapRepository extends JpaRepository<FarmerSchedul
      * @return List of all gaps for this farmer crop variety
      */
     List<FarmerScheduleGap> findByFarmerCropVarietyId(Long farmerCropVarietyId);
+
+    /**
+     * Find all gaps for a specific farmer.
+     * Used for deletion when deleting farmer profile.
+     * @param farmerId the farmer user profile ID
+     * @return List of all gaps for this farmer
+     */
+    List<FarmerScheduleGap> findByFarmerId(Long farmerId);
 }
 

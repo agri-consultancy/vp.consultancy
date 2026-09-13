@@ -639,4 +639,93 @@ public class  ConsultantController {
             HttpStatus.OK.value()
         ));
     }
+
+    /**
+     * Deletes a farmer profile and all associated data.
+     *
+     * Rate limited to 20 requests per 60 seconds.
+     * Only accessible to users with CONSULTANT role.
+     * Only the farmer's assigned consultant can delete the farmer profile.
+     *
+     * Business Logic:
+     * 1. Verifies farmer exists and belongs to current consultant
+     * 2. Deletes all associated farmer data (crop assignments, schedules, gaps)
+     * 3. Deletes UserProfile and User entities
+     * 4. Deletes associated Address
+     * 5. Clears relevant caches
+     *
+     * @param farmerId the farmer user profile ID
+     * @return ResponseEntity with ApiResponse indicating successful deletion
+     * @throws ResourceNotFoundException if farmer not found
+     * @throws AccessDeniedException if farmer doesn't belong to current consultant
+     * @throws RateLimitExceededException if rate limit is exceeded
+     */
+    @DeleteMapping("/farmers/{farmerId}")
+    @RateLimit(limit = 20, windowSize = 60)
+    public ResponseEntity<ApiResponse<Void>> deleteFarmerProfile(
+            @PathVariable Long farmerId) {
+        logger.info("Deleting farmer profile with ID: {}", farmerId);
+
+        cropVarietyService.deleteFarmerProfile(farmerId);
+        logger.info("Farmer profile deleted successfully for farmer ID: {}", farmerId);
+
+        return ResponseEntity.ok(new ApiResponse<>(
+            true,
+            "Farmer profile and all associated data deleted successfully",
+            null,
+            HttpStatus.OK.value()
+        ));
+    }
+
+    /**
+     * Deletes a crop variety created by the consultant.
+     *
+     * Rate limited to 20 requests per 60 seconds.
+     * Only accessible to users with CONSULTANT role.
+     * Only the consultant who created the variety can delete it.
+     * Crop variety cannot be deleted if it is assigned to any farmers.
+     *
+     * Business Logic:
+     * 1. Verifies consultant owns this crop variety
+     * 2. Checks if crop variety is assigned to any farmers
+     * 3. If assigned, returns error response
+     * 4. Deletes all MasterScheduleTemplate records for this crop variety
+     * 5. Deletes the CropVariety record
+     * 6. Clears relevant caches
+     *
+     * @param cropVarietyId the crop variety ID
+     * @return ResponseEntity with ApiResponse indicating success or error
+     * @throws ResourceNotFoundException if crop variety not found or not owned by current consultant
+     * @throws RateLimitExceededException if rate limit is exceeded
+     */
+    @DeleteMapping("/crop-varieties/{cropVarietyId}")
+    @RateLimit(limit = 20, windowSize = 60)
+    public ResponseEntity<ApiResponse<Void>> deleteCropVariety(
+            @PathVariable Long cropVarietyId) {
+        logger.info("Deleting crop variety with ID: {}", cropVarietyId);
+
+        try {
+            cropVarietyService.deleteCropVariety(cropVarietyId);
+            logger.info("Crop variety deleted successfully for variety ID: {}", cropVarietyId);
+
+            return ResponseEntity.ok(new ApiResponse<>(
+                true,
+                "Crop variety and all associated master schedules deleted successfully",
+                null,
+                HttpStatus.OK.value()
+            ));
+        } catch (ResourceNotFoundException e) {
+            logger.warn("Failed to delete crop variety ID: {} - {}", cropVarietyId, e.getMessage());
+            // Check if the error message indicates the variety is assigned to farmers
+            if (e.getMessage() != null && e.getMessage().contains("assigned to farmers")) {
+                return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiResponse<>(
+                    false,
+                    "This crop variety is already assigned to farmers. You cannot delete it until all farmer assignments are removed.",
+                    null,
+                    HttpStatus.CONFLICT.value()
+                ));
+            }
+            throw e;
+        }
+    }
 }

@@ -359,10 +359,8 @@ public class UserServiceImpl implements UserService {
         // Update basic profile information
         farmer.setFirstName(request.getFirstName());
         farmer.setLastName(request.getLastName());
-        if (request.getSector() != null && !request.getSector().isEmpty()) {
-            farmer.setSector(request.getSector());
-        }
-        logger.info("Updated farmer name and sector for farmer ID: {}", farmerId);
+
+        logger.info("Updated farmer name for farmer ID: {}", farmerId);
 
         // Update or create Address
         if (request.getAddressLine() != null || request.getCity() != null ||
