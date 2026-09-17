@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -24,4 +25,7 @@ public interface FarmerScheduleDayRepository extends JpaRepository<FarmerSchedul
             @Param("farmerId") Long farmerId,
             @Param("farmerCropVarietyId") Long farmerCropVarietyId,
             @Param("dayNumber") Long dayNumber);
+
+    @Query("SELECT fsd FROM FarmerScheduleDay fsd WHERE fsd.farmer.id = :farmerId")
+    List<FarmerScheduleDay> findByFarmerId(@Param("farmerId") Long farmerId);
 }

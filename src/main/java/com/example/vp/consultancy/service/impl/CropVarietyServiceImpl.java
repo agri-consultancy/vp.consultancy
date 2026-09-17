@@ -14,6 +14,7 @@ import com.example.vp.consultancy.entity.Crop;
 import com.example.vp.consultancy.entity.CropVariety;
 import com.example.vp.consultancy.entity.FarmerCropVariety;
 import com.example.vp.consultancy.entity.FarmerCropVarietySchedule;
+import com.example.vp.consultancy.entity.FarmerScheduleDay;
 import com.example.vp.consultancy.entity.FarmerScheduleGap;
 import com.example.vp.consultancy.entity.MasterScheduleTemplate;
 import com.example.vp.consultancy.entity.User;
@@ -54,25 +55,31 @@ public class CropVarietyServiceImpl implements CropVarietyService {
     private final CropRepository cropRepository;
     private final UserProfileRepository userProfileRepository;
     private final FarmerScheduleGapRepository farmerScheduleGapRepository;
+    private final FarmerScheduleDayRepository farmerScheduleDayRepository;
     private final UserRepository userRepository;
     private final AddressRepository addressRepository;
     private final MasterScheduleTemplateRepository masterScheduleTemplateRepository;
+    private final RefreshTokenRepository refreshTokenRepository;
 
     public CropVarietyServiceImpl(CropVarietyRepository cropVarietyRepository,
                                   FarmerCropVarietyRepository farmerCropVarietyRepository, FarmerCropVarietyScheduleRepository farmerCropVarietyScheduleRepository,
                                   CropRepository cropRepository,
                                   UserProfileRepository userProfileRepository, FarmerScheduleGapRepository farmerScheduleGapRepository,
+                                  FarmerScheduleDayRepository farmerScheduleDayRepository,
                                   UserRepository userRepository, AddressRepository addressRepository,
-                                  MasterScheduleTemplateRepository masterScheduleTemplateRepository) {
+                                  MasterScheduleTemplateRepository masterScheduleTemplateRepository,
+                                  RefreshTokenRepository refreshTokenRepository) {
         this.cropVarietyRepository = cropVarietyRepository;
         this.farmerCropVarietyRepository = farmerCropVarietyRepository;
         this.farmerCropVarietyScheduleRepository = farmerCropVarietyScheduleRepository;
         this.cropRepository = cropRepository;
         this.userProfileRepository = userProfileRepository;
         this.farmerScheduleGapRepository = farmerScheduleGapRepository;
+        this.farmerScheduleDayRepository = farmerScheduleDayRepository;
         this.userRepository = userRepository;
         this.addressRepository = addressRepository;
         this.masterScheduleTemplateRepository = masterScheduleTemplateRepository;
+        this.refreshTokenRepository = refreshTokenRepository;
     }
 
     @Override
@@ -732,6 +739,17 @@ public class CropVarietyServiceImpl implements CropVarietyService {
         }
         logger.info("Ownership verified. Consultant {} owns farmer ID: {}", consultant.getId(), farmerId);
 
+        // Delete all FarmerScheduleDay records first to avoid foreign key constraint violations
+        List<FarmerScheduleDay> scheduleDays = farmerScheduleDayRepository.findByFarmerId(farmerId);
+        logger.info("Found {} schedule days to delete for farmer ID: {}", scheduleDays.size(), farmerId);
+        if (!scheduleDays.isEmpty()) {
+            // Delete schedule days individually to trigger any cascade or remove hooks
+            for (FarmerScheduleDay day : scheduleDays) {
+                farmerScheduleDayRepository.delete(day);
+            }
+            logger.info("Deleted {} schedule days for farmer ID: {}", scheduleDays.size(), farmerId);
+        }
+
         // Delete all FarmerCropVarietySchedule records
         List<FarmerCropVarietySchedule> schedules = farmerCropVarietyScheduleRepository.findByFarmerId(farmerId);
         logger.info("Found {} schedules to delete for farmer ID: {}", schedules.size(), farmerId);
@@ -762,21 +780,32 @@ public class CropVarietyServiceImpl implements CropVarietyService {
             logger.info("Deleted {} farmer crop variety assignments for farmer ID: {}", farmerCrops.size(), farmerId);
         }
 
-        // Get address ID before deleting UserProfile
+        // Get address ID and user ID before deleting UserProfile
         Long addressId = null;
         if (farmer.getAddress() != null) {
             addressId = farmer.getAddress().getId();
+        }
+        
+        User farmerUser = farmer.getUser();
+        Long userId = null;
+        if (farmerUser != null) {
+            userId = farmerUser.getId();
         }
 
         // Delete UserProfile
         userProfileRepository.delete(farmer);
         logger.info("Deleted UserProfile for farmer ID: {}", farmerId);
 
+        // Delete all RefreshToken records for this user BEFORE deleting the User entity
+        if (userId != null) {
+            refreshTokenRepository.deleteByUser_Id(userId);
+            logger.info("Deleted all refresh tokens for user ID: {}", userId);
+        }
+
         // Delete User entity
-        User farmerUser = farmer.getUser();
         if (farmerUser != null) {
             userRepository.delete(farmerUser);
-            logger.info("Deleted User entity for farmer ID: {} with user ID: {}", farmerId, farmerUser.getId());
+            logger.info("Deleted User entity for farmer ID: {} with user ID: {}", farmerId, userId);
         }
 
         // Delete Address if it exists
